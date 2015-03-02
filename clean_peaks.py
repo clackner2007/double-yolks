@@ -14,15 +14,18 @@ import sys, os, re
 import argparse
 import numpy as np
 
+from astropy import table
+from collections import defaultdict
+
 import matplotlib.figure as figure
 from matplotlib.backends.backend_ps import FigureCanvasPS as FigCanvasPS
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigCanvasA
 from matplotlib.patches import Ellipse
 
-from cosm_distTable import CosmoDist
-from cosm_dist import ang_dist
+from astropy.cosmology import FlatLambdaCDM 
 import pyfits
 from scipy.stats import scoreatpercentile
+from ConfigParser import SafeConfigParser
 
 ########################
 def addCol(data, newarray, newname):
@@ -54,50 +57,49 @@ class Nuclei():
 
 class Galaxy():
 
-    def __init__(self,ra,dec,z,cosmos_id,gal_mag,
-                 ang_dist, ang_dist_delz, file_id=0, delz=0.0):
+    def __init__(self, ident, z, mag, ang_dist, ang_dist_orig, ra=None, dec=None, imgfile=None,
+                 delz=0.0, zeropoint=25.959, pixelscale=0.03):
         self.ra=ra
         self.dec=dec
+        self.imgfile = imgfile
         self.z=z
-        self.cosmos_id = cosmos_id
-        self.file_id=file_id
+        self.ident = ident
         self.nuclei=[]
         self.ad = ang_dist
-        self.ad_delz = ang_dist_delz
-        self.kpc_p_pix = (self.ad*1000.0)/(206265.0)*0.03
-        self.flux = 10**(-0.4*(gal_mag - 25.959))
-        self.mag = gal_mag
+        self.kpc_p_pix = (self.ad*1000.0)/(206265.0)*pixelscale
+        self.flux = 10**(-0.4*(mag - zeropoint))
+        self.mag = mag
         self.delz = delz
+        self.ad_orig = ang_dist_orig
         self.goodMask = None
 
 
     def add_nuclei(self, n):
         self.nuclei.append(n)
 
-    def num_nuclei(self, mask=True):
+    def num_nuclei(self, mask=True, **kwargs):
         if len(self.nuclei)==0:
             return 0
         elif mask:
-            return len(np.asarray(self.nuclei)[self.good_nuclei()])
+            return len(np.asarray(self.nuclei)[self.good_nuclei(**kwargs)])
         else:
             return len(self.nuclei)
 
-    def good_nuclei(self, ecut=0.2, dist_cut=(0.0, 8.0), 
+    def good_nuclei(self, ecut=0.2, dist_cut=(0.0,8.0),
                     flux_cut=0.25,
                     totflux_cut=0.03, #0.03, #0.2, #0.05,
                     cent_dist_cut=10.0,
-                    center=(8/0.03*0.5,8/0.03*0.5), redo=False):
+                    center=(8/0.03*0.5,8/0.03*0.5), 
+                    pearsonr_cut=0.5,
+                    redo=False):
         if (self.goodMask is not None) & (~redo):
             return self.goodMask
 
-        #if self.cosmos_id==272688:
-        #    import pdb
-        #    pdb.set_trace()
             
-        center = (8.0/0.03*0.5*self.ad_delz/self.ad,#ang_dist(self.z-self.delz)/self.ad,
-                  8.0/0.03*0.5*self.ad_delz/self.ad)#ang_dist(self.z-self.delz)/self.ad)
-        distcent = np.array([nn.getDist(center[0], center[1], scale=0.03)
-                            for nn in self.nuclei])
+        center = (8.0/0.03*0.5*self.ad_orig/self.ad,#ang_dist(self.z-self.delz)/self.ad,
+                  8.0/0.03*0.5*self.ad_orig/self.ad)#ang_dist(self.z-self.delz)/self.ad)
+        #distcent = np.array([nn.getDist(center[0], center[1], scale=0.03)
+        #                    for nn in self.nuclei])
         mask = np.array([(nn.ellip >= ecut) &
                          (nn.allflux/self.flux >= totflux_cut) &
                          #max(totflux_cut - 
@@ -126,9 +128,9 @@ class Galaxy():
         else:
             self.goodMask = mask
 
-        if (distcent[self.goodMask] >= 1.0).all():
-            self.goodMask = np.zeros(len(self.nuclei), dtype=bool)
-        if np.abs(self.getPearsonR(masked=True)) > 0.5:
+        #if (distcent[self.goodMask] >= 1.0).all():
+        #    self.goodMask = np.zeros(len(self.nuclei), dtype=bool)
+        if np.abs(self.getPearsonR(masked=True)) > pearsonr_cut:
             self.goodMask = np.zeros(len(self.nuclei), dtype=bool)
 
         return self.goodMask
@@ -163,15 +165,16 @@ class Galaxy():
 
 
 
-    def getMaxNuc(self,masked=True):
+    def getMaxNuc(self,masked=True, **kwargs):
         if masked:
-            nucs=np.asarray(self.nuclei)[self.good_nuclei()]
+            nucs=np.asarray(self.nuclei)[self.good_nuclei(**kwargs)]
         else:
             nucs=np.asarray(self.nuclei)
         mymax=np.argmax([nn.allflux for nn in nucs])
         return mymax
-
-    def plot(self, FigCanvas, ending, path='../imgs/', outdir='wwwnosinc/'):
+        
+        
+    def plot(self, FigCanvas, ending, path='../imgs/', outdir=''):
         fig=figure.Figure((8,4))
         canv=FigCanvas(fig)
 
@@ -180,9 +183,6 @@ class Galaxy():
                               (self.file_id, self.ra, self.dec))[0].data
         size=img.shape
         vmax = 14*np.std(img.flatten())
-#scoreatpercentile(img[size[0]/4:3*size[0]/4,#
-#                                    size[1]/4:3*size[1]/4].flatten(),
-#                              99.9)
         ax1.imshow(np.arcsinh(img), origin='lower', cmap='gray',
                    vmax=np.arcsinh(vmax), aspect='equal',
                    interpolation='none')
@@ -231,8 +231,10 @@ def makehtml(gals, mylist, FigCanvas, ending):
         s2 += "<tr><td>%s:</td><td>%s</td></tr>\n" % \
             ('COSMOS_ID',repr(gals[i].cosmos_id))
         s2 += "<tr><td>%s:</td><td>%.3f</td></tr>\n" % ('Z',gals[i].z)
-        s2 += "<tr><td>%s:</td><td>%.6f</td></tr>\n" % ('RA',gals[i].ra)
-        s2 += "<tr><td>%s:</td><td>%.6f</td></tr>\n" % ('DEC',gals[i].dec)
+        if gals[i].ra:
+            s2 += "<tr><td>%s:</td><td>%.6f</td></tr>\n" % ('RA',gals[i].ra)
+        if gals[i].dec:
+            s2 += "<tr><td>%s:</td><td>%.6f</td></tr>\n" % ('DEC',gals[i].dec)
         s2 += "<tr><td>%s:</td><td>%.3e</td></tr>\n" % ('P1/P2', 
                                                         peaks[1].allflux/peaks[0].allflux)
         s2 += "<tr><td>%s:</td><td>%.3e</td></tr>\n" % ('P2/tot', 
@@ -242,7 +244,7 @@ def makehtml(gals, mylist, FigCanvas, ending):
         s2 += "</table>\n"
         s += "<td>%s</td>\n" % (s2)
         s += "<td><img src={0}></td>\n".\
-            format('peaks_{0}{1}'.format(gals[i].cosmos_id,ending))
+            format('peaks_{0}{1}'.format(gals[i].ident,ending))
         s += "</tr>\n"
 
 
@@ -260,23 +262,26 @@ def main():
 
     parser = argparse.ArgumentParser(description=__doc__,
               formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-#    parser.add_argument("-t", "--temp",
-#               action='store_true', default=False, help="temp opt",
-#               dest='temp')
-    parser.add_argument("file_gal", help="galaxy listing")
-    parser.add_argument("file_peaks", help="peak listing")
+    parser.add_argument("inputfile", help='input file table')
+    parser.add_argument("file_gal", help="galaxy listing from peak_filter (gal_list)")
+    parser.add_argument("file_peaks", help="peak listing from peak_filter (peak_list)")
+    parser.add_argument("param_file", help="config parameter file (*.ini) for cleaning peaks")
+    parser.add_argument('--hubble', default=70.0, help='Hubble constant in flat LCDM', type=float)
+    parser.add_argument('--omegaM', default=0.3, help='Omega Matter in flat LCDM', type=float)
     parser.add_argument("-e", "--eps",
                  action='store_true', default=False, help='make eps plots',
                  dest='epsPlot')
-    parser.add_argument("-d", "--deltaz",
-                        help='change in redshift from original',
-                        default=0.0, type=float, dest='delz')
     parser.add_argument('-l', '--plot', dest='plotid',
                         type=int)
     parser.add_argument("-p", "--path", default='./',
                         help='path to output',
                         dest='path')
     args = parser.parse_args()
+    
+    cParser = SafeConfigParser()
+    cParser.read(args.param_file)
+    gal_kwargs = dict([(name, cParser.getfloat('galaxy_init', name)) 
+                        for name in cParser.options('galaxy_init')])
 
     FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
     ending='.eps' if args.epsPlot else '.png'
@@ -284,47 +289,59 @@ def main():
 
     gals=[]
 
-    g1=np.loadtxt(args.file_gal)
-    p1=np.loadtxt(args.file_peaks)
-    g1ra=3#2#3
-    g1dec=4#3#4
-    g1z=1
-    g1id=0
-    g1file=6#0#6
-    g1imag=5#4#5
-    g1dz=2
-    g1[:,g1dz] *= args.delz
-    g1 = np.append(g1, ang_dist(g1[:,g1z]).reshape(len(g1),1), axis=1)#addCol(g1, CosmoDist().ang_dist(g1[g1z]), 'ang_dist')
-    g1 = np.append(g1, ang_dist(g1[:,g1z]-g1[:,g1dz]).reshape(len(g1),1), axis=1)#addCol(g1, CosmoDist().ang_dist(g1[g1z]+g1[g1dz]))
-    keyp = zip(g1[:,0], g1[:,4]) #for mocks
-#    keyp = zip(g1[:,g1ra], g1[:,g1dec]) #for real
-    dict_g = dict(zip(keyp,g1))
-    dictp = {}
+    g1 = table.Table().read(args.file_gal, format='ascii')
+    p1 = table.Table().read(args.file_peaks, format='ascii')
+
+    cosmos = FlatLambdaCDM(H0=args.hubble, Om0=args.omegaM)  
     
+    g1.add_column(table.Column(name='ang_dist', data=cosmos.angular_diameter_distance(g1['Z']).value))
+    g1.add_column(table.Column(name='ang_dist_orig', 
+                               data=cosmos.angular_diameter_distance(g1['Z']-g1['DELTA_Z']).value))
+                              
+    extra = table.Table().read(args.inputfile, 
+                                format='fits' if os.path.splitext(args.inputfile)[1]=='.fits' else 'ascii')
+    if ("RA" in extra.colnames) and ("DEC" in extra.colnames):
+        g1.add_column(extra["RA"])
+        g1.add_column(extra["DEC"])
+        
+    g1.add_column(extra["FILENAME"])
+ 
+    dict_g = dict(zip(zip(g1['ID'], g1['DELTA_Z']),g1))
+    peak_dict = defaultdict(list)
 
     for e in p1:
-#        kp = (e[1], e[2])  #for real
-        kp = (e[0], e[2]) #for mocks
-        if kp not in dictp:
-            dictp[kp] = []
-        dictp[kp].append(e)
+        peak_dict[(e['ID'], e['DELTA_Z'])].append(e)
 
-    for k in keyp:
+    for k in dict_g:
         gg=dict_g[k]
-        gals.append(Galaxy(gg[g1ra], gg[g1dec], gg[g1z],
-                           int(gg[g1id]), gg[g1imag], 
-                            gg[-2], gg[-1], 0, delz=gg[g1dz]))
-        if k in dictp:
-            for p in dictp[k]:
-                gals[-1].add_nuclei(Nuclei(p[6], p[7], int(p[4]),
-                                           p[8], p[5], p[9]))
+        gals.append(Galaxy(gg['ID'], gg['Z'], gg['MAG'], gg['ang_dist'], 
+                           gg['ang_dist_orig'],
+                           ra=gg['RA'] if 'RA' in gg.colnames else None,
+                            dec=gg['DEC'] if 'DEC' in gg.colnames else None, 
+                            delz=gg['DELTA_Z'], imgfile=gg['FILENAME'], **gal_kwargs))
+        if k in peak_dict:
+            for p in peak_dict[k]:
+                gals[-1].add_nuclei(Nuclei(p['PEAK_X0_PIX'], p['PEAK_Y0_PIX'], p['PEAK_NPIX'],
+                                           p['PEAK_FLUX_FILTERED'], p['PEAK_B-A'], p['PEAK_FLUX']))
                 gals[-1].file_id = int(p[0])
 
     gals = np.asarray(gals)
-    n_nucs = np.array([g.num_nuclei() for g in gals])
+
+    clean_params = dict((name, cParser.getfloat("good_nuclei", name)) for name in cParser.options("good_nuclei"))
+    clean_params['dist_cut'] = (clean_params['dist_cut_1'], clean_params['dist_cut_2'])
+    del clean_params['dist_cut_1']
+    del clean_params['dist_cut_2']
+    clean_params['center'] = (clean_params['imsize_x']*0.5/gal_kwargs['pixelscale'],
+                             clean_params['imsize_y']*0.5/gal_kwargs['pixelscale'])
+    del clean_params['imsize_x']
+    del clean_params['imsize_y']
+    
+    n_nucs = np.array([g.num_nuclei(**clean_params) for g in gals])
 
     not_pairs = np.where(n_nucs < 2)[0]
     in_pairs = np.where(n_nucs >= 2)[0]
+
+    sys.exit()
 
     if not args.plotid:
         f = open(args.path+'foo2', 'w')
