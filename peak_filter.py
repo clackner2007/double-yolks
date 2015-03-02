@@ -171,7 +171,7 @@ def mapMeasPeak(galobj, r_in_fwhm=1.28, ring_width=0.7, fwhm_all=None):
 
     pstring = ''
     for ip, p in enumerate(peak_list):
-            pstring += '%d %d '%(galobj['id'], ip)
+            pstring += '%d %.2e %d '%(galobj['id'], galobj['delz'], ip)
             ms=p.getMoments()
             pstring += '%d %.2e '%(p.size, (ms[1]/ms[0]))
             pstring +='%.7f '%p.getCenter()[0]+'%.7f '%p.getCenter()[1]
@@ -265,7 +265,7 @@ def main():
     
     #header for output
     gal_file.write("ID Z DELTA_Z MAG NPEAKS\n")
-    peak_file.write("ID PEAK_ID PEAK_NPIX PEAK_B-A PEAK_X0_PIX PEAK_Y0_PIX PEAK_FLUX_FILTERED PEAK_FLUX\n")
+    peak_file.write("ID DELTA_Z PEAK_ID PEAK_NPIX PEAK_B-A PEAK_X0_PIX PEAK_Y0_PIX PEAK_FLUX_FILTERED PEAK_FLUX\n")
 
     #multi-thread
     pool = Pool(processes=args.nthreads)
