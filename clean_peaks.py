@@ -23,6 +23,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigCanvasA
 from matplotlib.patches import Ellipse
 
 from astropy.cosmology import FlatLambdaCDM 
+import astropy.wcs
 import pyfits
 from ConfigParser import SafeConfigParser
 
@@ -71,7 +72,11 @@ class Galaxy():
         self.delz = delz
         self.ad_orig = ang_dist_orig
         self.goodMask = None
-
+        try:
+            self.wcs = astropy.wcs.WCS(self.imgfile)
+        except:
+            print "No WCS available in image"
+            self.wcs = None
 
     def add_nuclei(self, n):
         self.nuclei.append(n)
@@ -173,12 +178,12 @@ class Galaxy():
         return mymax
         
         
-    def plot(self, FigCanvas, ending, path, outdir=''):
+    def plot(self, FigCanvas, ending, outdir=''):
         fig=figure.Figure((8,4))
         canv=FigCanvas(fig)
 
         ax1=fig.add_subplot(121, frameon=False)
-        img = pyfits.open(path+'/'+self.imgfile)[0].data
+        img = pyfits.open(self.imgfile)[0].data
         vmax = 14*np.std(img.flatten())
         ax1.imshow(np.arcsinh(img), origin='lower', cmap='gray',
                    vmax=np.arcsinh(vmax), aspect='equal',
@@ -212,13 +217,13 @@ class Galaxy():
 
 
 ###############################################################
-def makehtml(gals, mylist, FigCanvas, ending, imgpath, outpath):
+def makehtml(gals, mylist, FigCanvas, ending, outpath):
 
     s  = "<html>\n"
     s += "<body>\n"
     s += "<table>\n"
     for i in mylist:
-        gals[i].plot(FigCanvas,ending, path=imgpath, outdir=outpath)
+        gals[i].plot(FigCanvas,ending, outdir=outpath)
         peaks = sorted(np.asarray(gals[i].nuclei)[gals[i].good_nuclei()], 
                        key=lambda p: p.allflux,
                        reverse=True)
@@ -266,9 +271,10 @@ def main():
     parser.add_argument("-p", "--path", default='./', help='path to output', dest='path')
     parser.add_argument('--hubble', default=70.0, help='Hubble constant in flat LCDM', type=float)
     parser.add_argument('--omegaM', default=0.3, help='Omega Matter in flat LCDM', type=float)
+    parser.add_argument('-x', '--pixels', dest='pixels', default=False, action='store_true',
+                        help='output pair coordinates in clean_pairs.txt in pixels instead of ra/dec')
     parser.add_argument('-l', '--plot', dest='makePlots', default=False,
                         action='store_true', help='make images of peaks')
-                    
     parser.add_argument("-i","--imgpath", help='path to images, needed for plotting')
     parser.add_argument("-e", "--eps",
                         action='store_true', default=False, help='make eps plots', dest='epsPlot')
@@ -297,7 +303,7 @@ def main():
         g1.add_column(extra["RA"])
         g1.add_column(extra["DEC"])
         
-    g1.add_column(extra["FILENAME"])
+    g1.add_column(table.Column(name="FILENAME", data=map(lambda x: args.imgpath+"/"+x, extra["FILENAME"])))
  
     dict_g = dict(zip(zip(g1['ID'], g1['DELTA_Z']),g1))
     peak_dict = defaultdict(list)
@@ -336,12 +342,26 @@ def main():
     f = open(args.path+'cleaned_peaks_sources.txt', 'w')
     f1 = open(args.path+'all_peaks_sources.txt', 'w')
     fpeaks = open(args.path+'cleaned_peaks.txt', 'w')
+
+    fpairs = open(args.path+"clean_pairs.txt", 'w')    
+    
+    print >>f1, "ID Z RA DEC PearonRho N_PEAK DIST_FROM_BRIGHTEST(xN_PEAK) FLUX(xN_PEAK)"
+    print >>f, "ID Z RA DEC PearonRho N_PEAK DIST_FROM_BRIGHTEST(xN_PEAK) FLUX(xN_PEAK)"
+    print >>fpeaks, "ID Z (PEAK_X0_PIX PEAK_Y0_PIX)xN_PEAK"
+    print >>fpairs, "ID Z RA DEC PearsonRho N_PEAK SEP_KPC FLUX_RATIO",
+    
+    doRaDec = (~args.pixels) & (sum([g.wcs is None for g in gals])==0)
+    if doRaDec:
+        print >>fpairs, "RA_P0 DEC_P0 RA_P1 DEC_P1 FLUX_P0 FLUX_P1"
+    else:
+        print >>fpairs, "X0_P0 Y0_P0 X0_P1 Y0_P1 FLUX_P0 FLUX_P1"
     
     for g in gals[np.where(np.array([g.num_nuclei(mask=False) for g in gals])>=2)[0]]:
         maxN = g.getMaxNuc(masked=False)
-        print >>f1,"%6d %.6f %.6f %.3f %d"%(g.ident, g.ra if g.ra else np.NaN, g.dec if g.dec else np.NaN,
-                                           g.getPearsonR(),
-                                           g.num_nuclei(mask=False)),
+        print >>f1,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
+                                                 g.dec if g.dec else np.NaN,
+                                                 g.getPearsonR(),     
+                                                g.num_nuclei(mask=False)),
         for p in np.asarray(g.nuclei):
             print >>f1, "%.5e"%(p.getDist(g.nuclei[maxN].x0,
                                          g.nuclei[maxN].y0,
@@ -352,13 +372,18 @@ def main():
     
     
     for g in gals[in_pairs]:
-        print >>f,"%6d %.6f %.6f %.3f %d"%(g.ident, g.ra if g.ra else np.NaN, g.dec if g.dec else np.NaN,
-                                           g.getPearsonR(),
-                                           g.num_nuclei(**clean_params)),
-       
+        print >>f,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
+                                                g.dec if g.dec else np.NaN,
+                                                g.getPearsonR(),
+                                               g.num_nuclei(**clean_params)),
+        print >>fpairs,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
+                                                     g.dec if g.dec else np.NaN,
+                                                     g.getPearsonR(),
+                                                   g.num_nuclei(**clean_params)),
+        print >>fpeaks, "%6d %.3f"%(g.ident, g.z),
         maxN = g.getMaxNuc(masked=True, **clean_params)
         
-        goodp = np.asarray(g.nuclei)[g.good_nuclei()]
+        goodp = np.asarray(g.nuclei)[g.good_nuclei(**clean_params)]
         for p in goodp:
             print >>f, "%.5e"%(p.getDist(goodp[maxN].x0,
                                          goodp[maxN].y0,
@@ -370,18 +395,30 @@ def main():
         print >>f,''
         print >>fpeaks,""
         
+        order = sorted(range(len(goodp)), key=lambda k: goodp[k].flux, reverse=True)
+        p0 = goodp[order[0]]
+        p1 = goodp[order[1]]
+        print >>fpairs, "%.5f %.5e "%(p1.getDist(p0.x0, p0.y0, scale=g.kpc_p_pix), p1.allflux/p0.allflux),
+        if doRaDec:
+            coords = g.wcs.all_pix2world([p0.x0, p1.x0], [p0.y0, p1.y0], 0)
+            print >>fpairs, "%.6f %.6f %.6f %.6f %.3e %.3e"%(coords[0][0], coords[1][0],
+                                                             coords[0][1], coords[1][1],
+                                                             p0.allflux, p1.allflux)
+        else:
+            print >>fpairs, "%.3f %.3f %.3f %.3f %.3e %.3e"%(p0.x0, p0.y0, p1.x0, p1.y0, 
+                                                             p0.allflux, p1.allflux)
+        
     f.close()
     fpeaks.close()
     f1.close()
+    fpairs.close()
 
     if args.makePlots:
         FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
         ending='.eps' if args.epsPlot else '.png'
         my_list = np.arange(len(gals))[(n_nucs >=2)]
         #rand = np.random.permutation(my_list)[:100]
-        if args.imgpath is None: 
-            raise AttributeError("Need input path to images in command line for plotting (-i option)")
-        s = makehtml(gals, my_list, FigCanvas,ending, args.imgpath, args.path)
+        s = makehtml(gals, my_list, FigCanvas,ending, args.path)
         htmlFile = open(args.path+'/imgs.html', 'w')
         htmlFile.write(s)
         htmlFile.close()
