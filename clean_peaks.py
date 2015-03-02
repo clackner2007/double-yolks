@@ -10,7 +10,7 @@
 ##############################
 """program details"""
 
-import sys, os, re
+import os
 import argparse
 import numpy as np
 
@@ -24,7 +24,6 @@ from matplotlib.patches import Ellipse
 
 from astropy.cosmology import FlatLambdaCDM 
 import pyfits
-from scipy.stats import scoreatpercentile
 from ConfigParser import SafeConfigParser
 
 ########################
@@ -174,14 +173,12 @@ class Galaxy():
         return mymax
         
         
-    def plot(self, FigCanvas, ending, path='../imgs/', outdir=''):
+    def plot(self, FigCanvas, ending, path, outdir=''):
         fig=figure.Figure((8,4))
         canv=FigCanvas(fig)
 
         ax1=fig.add_subplot(121, frameon=False)
-        img = pyfits.open(path+'%04d_%.6f_%.6f_acs_I_mosaic_30mas_sci.fits'%\
-                              (self.file_id, self.ra, self.dec))[0].data
-        size=img.shape
+        img = pyfits.open(path+'/'+self.imgfile)[0].data
         vmax = 14*np.std(img.flatten())
         ax1.imshow(np.arcsinh(img), origin='lower', cmap='gray',
                    vmax=np.arcsinh(vmax), aspect='equal',
@@ -211,17 +208,17 @@ class Galaxy():
                           labelbottom='off', labelleft='off')
         fig.subplots_adjust(top=0.98,left=0.0,right=0.98,bottom=0.00,
                             hspace=0.01, wspace=-0.1)
-        fig.savefig(outdir+'peaks_{0}'.format(self.cosmos_id)+ending)
+        fig.savefig(outdir+'peaks_{0}'.format(self.ident)+ending)
 
 
 ###############################################################
-def makehtml(gals, mylist, FigCanvas, ending):
+def makehtml(gals, mylist, FigCanvas, ending, imgpath, outpath):
 
     s  = "<html>\n"
     s += "<body>\n"
     s += "<table>\n"
     for i in mylist:
-        gals[i].plot(FigCanvas,ending)
+        gals[i].plot(FigCanvas,ending, path=imgpath, outdir=outpath)
         peaks = sorted(np.asarray(gals[i].nuclei)[gals[i].good_nuclei()], 
                        key=lambda p: p.allflux,
                        reverse=True)
@@ -229,7 +226,7 @@ def makehtml(gals, mylist, FigCanvas, ending):
         s += "<tr>\n"
         s2 = "<table>\n"
         s2 += "<tr><td>%s:</td><td>%s</td></tr>\n" % \
-            ('COSMOS_ID',repr(gals[i].cosmos_id))
+            ('COSMOS_ID',repr(gals[i].ident))
         s2 += "<tr><td>%s:</td><td>%.3f</td></tr>\n" % ('Z',gals[i].z)
         if gals[i].ra:
             s2 += "<tr><td>%s:</td><td>%.6f</td></tr>\n" % ('RA',gals[i].ra)
@@ -252,7 +249,7 @@ def makehtml(gals, mylist, FigCanvas, ending):
     s += "</body>\n"
     s += "</html>"
 
-    print s
+    return s
 
 
 
@@ -266,25 +263,21 @@ def main():
     parser.add_argument("file_gal", help="galaxy listing from peak_filter (gal_list)")
     parser.add_argument("file_peaks", help="peak listing from peak_filter (peak_list)")
     parser.add_argument("param_file", help="config parameter file (*.ini) for cleaning peaks")
+    parser.add_argument("-p", "--path", default='./', help='path to output', dest='path')
     parser.add_argument('--hubble', default=70.0, help='Hubble constant in flat LCDM', type=float)
     parser.add_argument('--omegaM', default=0.3, help='Omega Matter in flat LCDM', type=float)
+    parser.add_argument('-l', '--plot', dest='makePlots', default=False,
+                        action='store_true', help='make images of peaks')
+                    
+    parser.add_argument("-i","--imgpath", help='path to images, needed for plotting')
     parser.add_argument("-e", "--eps",
-                 action='store_true', default=False, help='make eps plots',
-                 dest='epsPlot')
-    parser.add_argument('-l', '--plot', dest='plotid',
-                        type=int)
-    parser.add_argument("-p", "--path", default='./',
-                        help='path to output',
-                        dest='path')
+                        action='store_true', default=False, help='make eps plots', dest='epsPlot')
     args = parser.parse_args()
     
     cParser = SafeConfigParser()
     cParser.read(args.param_file)
     gal_kwargs = dict([(name, cParser.getfloat('galaxy_init', name)) 
                         for name in cParser.options('galaxy_init')])
-
-    FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
-    ending='.eps' if args.epsPlot else '.png'
 
 
     gals=[]
@@ -338,90 +331,61 @@ def main():
     
     n_nucs = np.array([g.num_nuclei(**clean_params) for g in gals])
 
-    not_pairs = np.where(n_nucs < 2)[0]
     in_pairs = np.where(n_nucs >= 2)[0]
 
-    sys.exit()
-
-    if not args.plotid:
-        f = open(args.path+'foo2', 'w')
-        f1 = open(args.path+'nocutfoo2', 'w')
-        fpeaks = open(args.path+'foo2_peaks', 'w')
+    f = open(args.path+'cleaned_peaks_sources.txt', 'w')
+    f1 = open(args.path+'all_peaks_sources.txt', 'w')
+    fpeaks = open(args.path+'cleaned_peaks.txt', 'w')
+    
+    for g in gals[np.where(np.array([g.num_nuclei(mask=False) for g in gals])>=2)[0]]:
+        maxN = g.getMaxNuc(masked=False)
+        print >>f1,"%6d %.6f %.6f %.3f %d"%(g.ident, g.ra if g.ra else np.NaN, g.dec if g.dec else np.NaN,
+                                           g.getPearsonR(),
+                                           g.num_nuclei(mask=False)),
+        for p in np.asarray(g.nuclei):
+            print >>f1, "%.5e"%(p.getDist(g.nuclei[maxN].x0,
+                                         g.nuclei[maxN].y0,
+                                         scale=gal_kwargs['pixelscale'])),
+        for p in g.nuclei:
+            print >>f1, "%.5e"%(p.allflux),
+        print >>f1, ""
+    
+    
+    for g in gals[in_pairs]:
+        print >>f,"%6d %.6f %.6f %.3f %d"%(g.ident, g.ra if g.ra else np.NaN, g.dec if g.dec else np.NaN,
+                                           g.getPearsonR(),
+                                           g.num_nuclei(**clean_params)),
+       
+        maxN = g.getMaxNuc(masked=True, **clean_params)
         
-        for g in gals[np.where(np.array([g.num_nuclei(mask=False) for g in gals])>=2)[0]]:
-            maxN = g.getMaxNuc(masked=False)
-            print >>f1,"%6d %.6f %.6f %.3f %d"%(g.cosmos_id, g.ra, g.dec,
-                                               g.getPearsonR(),
-                                               g.num_nuclei()),
-            for p in np.asarray(g.nuclei):
-                print >>f1, "%.5e"%(p.getDist(g.nuclei[maxN].x0,
-                                             g.nuclei[maxN].y0,
-                                             scale=0.03)),
-            for p in g.nuclei:
-                print >>f1, "%.5e"%(p.allflux),
-            print >>f1, ""
+        goodp = np.asarray(g.nuclei)[g.good_nuclei()]
+        for p in goodp:
+            print >>f, "%.5e"%(p.getDist(goodp[maxN].x0,
+                                         goodp[maxN].y0,
+                                         scale=gal_kwargs['pixelscale'])),
+            print >>fpeaks, "%.3f %.3f"%(p.x0, p.y0),
+
+        for p in goodp:
+            print >>f, "%.5e"%(p.allflux),
+        print >>f,''
+        print >>fpeaks,""
         
-        
-        for g in gals[in_pairs]:
-            print >>f,"%6d %.6f %.6f %.3f %d"%(g.cosmos_id, g.ra, g.dec,
-                                               g.getPearsonR(),
-                                               g.num_nuclei()),
-           
-            maxN = g.getMaxNuc(masked=True)
-            
-            goodp = np.asarray(g.nuclei)[g.good_nuclei()]
-            #goodp = sorted(goodp, key=lambda pp:pp.allflux)
-            #print >>fpeaks,"%6d "%g.cosmos_id,
-            for p in goodp:
-                print >>f, "%.5e"%(p.getDist(goodp[maxN].x0,
-                                             goodp[maxN].y0,
-                                             scale=0.03)),
-                print >>fpeaks, "%.3f %.3f"%(p.x0, p.y0),
+    f.close()
+    fpeaks.close()
+    f1.close()
 
-            for p in goodp:
-                print >>f, "%.5e"%(p.allflux),
-            print >>f,''
-            print >>fpeaks,""
-            
-        f.close()
-        fpeaks.close()
-        f1.close()
-
-    if args.plotid:
-
-#        for g in gals[in_pairs]:
-#            goodp = np.asarray(g.nuclei)[g.good_nuclei()]
-#            flux = np.asarray(sorted([n.allflux for n in goodp]))
-#            rflux = flux/flux[-1]
-#            tflux = flux/g.flux
-#
-#            for i in range(len(flux)):
-#                print "%d %d "%(g.cosmos_id, len(goodp)),
-#                print "%.2f %.2f "%(-2.5*np.log10(g.flux)+25.959, g.z),
-#                print "%.3e %.3e "%(tflux[-1], np.sum(tflux)),
-#                print "%.3e %.3e"%(rflux[i], tflux[i])
-
-        if False:
-            pp=np.where(np.array([g.cosmos_id for g in gals])
-                        == args.plotid)[0][0]
-            print pp
-            print gals[pp].file_id
-            gals[pp].plot(FigCanvas,ending, outdir=args.path)
-
+    if args.makePlots:
+        FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
+        ending='.eps' if args.epsPlot else '.png'
         my_list = np.arange(len(gals))[(n_nucs >=2)]
-        print len(my_list), len(gals), len(in_pairs)
-        rand = np.random.permutation(my_list)[:100]
-        makehtml(gals,
-                 rand,
-                 FigCanvas,ending)
-
-    #if 800821 in [g.cosmos_id for g in gals[in_pairs]]:
-    #    print '800821 is in pairs'
-    #print len(in_pairs), len(not_pairs)
-
-
-
-
+        #rand = np.random.permutation(my_list)[:100]
+        if args.imgpath is None: 
+            raise AttributeError("Need input path to images in command line for plotting (-i option)")
+        s = makehtml(gals, my_list, FigCanvas,ending, args.imgpath, args.path)
+        htmlFile = open(args.path+'/imgs.html', 'w')
+        htmlFile.write(s)
+        htmlFile.close()
+        
     return 0
 
 
