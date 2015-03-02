@@ -15,13 +15,13 @@ program details
 import sys, os, re, copy
 import argparse
 import numpy as np
-from cosm_distTable import CosmoDist
 import pyfits
 import sigma_clip
 
-import matplotlib.figure as figure
-from matplotlib.backends.backend_ps import FigureCanvasPS as FigCanvasPS
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigCanvasA
+from astropy import table
+from astropy.cosmology import FlatLambdaCDM
+
+from ConfigParser import SafeConfigParser
 
 #######################################
 def moveImage(image, delta_r, phi, noiseadd):
@@ -55,9 +55,9 @@ def getMatch(selected, gal_list, delz=0.03, zests=[1,2,3]):
     pair = np.zeros_like(np.atleast_1d(selected))
     for inds, s in enumerate(np.atleast_1d(selected)):
         
-        parents = np.where((np.abs(gal_list['z'] - gal_list['z'][s]) < delz) &
-                            (gal_list['ident'] != gal_list['ident'][s]) & 
-                            (np.in1d(gal_list['zest'], zests)))[0]
+        parents = np.where((np.abs(gal_list['Z'] - gal_list['Z'][s]) < delz) &
+                            (gal_list['ID'] != gal_list['ID'][s]) & 
+                            (np.in1d(gal_list['ZEST'], zests)))[0]
 
         if len(parents) < 1:
             print "Not enouch close z pairs for ", gal_list[s]
@@ -70,52 +70,56 @@ def getMatch(selected, gal_list, delz=0.03, zests=[1,2,3]):
 
 
 ##############################
-def listStamps(infile, impath, outpath='.', mag_limit=20.5, ngal=2000):
+def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3, 
+               mag_limit=20.5, ngal=2000, pixel_scale=0.03,
+               zlims=[0.2,1.1], offsets = np.array([0.5, 1.5, 2.0, 2.5, 3.0, 5.0, 7.0, 10.0]), 
+                morph_class=[1,2,3]):
     """
     makes a list of postage stamp galaxies
     """
-    pixel_scale = 0.03
-    gal_list = np.loadtxt(infile,
-                          #unpack=True,
-                          dtype=[('ident', int),
-                                 ('z', float), ('mag', float), 
-                                 ('filename', '|S80'), ('zest', int),
-                                    ('logmass', float)],
-                          usecols=(0,2,3,1,96,101))
- 
-
-    gal_list = gal_list[(gal_list['z'] > 0.2) &
-                        (gal_list['z'] < 1.1)] #& ((gal_list['zest']==1) | (gal_list['zest']==2))]
+    #input needs columns IDENT, FILENAME, Z, and MAG, optionally ZEST (MORPHOLOGY CLASS)
+    gal_list = table.Table().read(infile,
+                            format='fits' if os.path.splitext(infile)[1]=='.fits' else 'ascii')
+    if 'ZEST' not in gal_list.colnames:
+        gal_list.add_column(table.Column(name='ZEST', 
+                                         data=np.ones(gal_list['ID'].shape)*morph_class[0]))
+    gal_list = gal_list[(gal_list['Z'] > zlims[0]) &
+                        (gal_list['Z'] < zlims[1])]
     #only apply magnitude limit to selected function
-    selected = np.random.permutation(np.where((gal_list['mag']<mag_limit))[0])[:ngal]
-    #selected = np.random.randint(0, len(gal_list), ngal)
-    paired = getMatch(selected, gal_list, zests=[1,2,3])
-    
+    selected = np.random.permutation(np.where((gal_list['MAG']<mag_limit))[0])[:ngal]
+    paired = getMatch(selected, gal_list, zests=morph_class)
+    print selected
+    print paired
     
     #offsets in kpc
-    offsets = np.array([0.5, 1.5, 2.0, 2.5, 3.0, 5.0, 7.0, 10.0])
-    to_pix = 1.0e-3/CosmoDist().ang_dist(gal_list['z']) * 206265. / pixel_scale
+    cosmos = FlatLambdaCDM(H0=args.hubble, Om0=args.omegaM)  
+
+    to_pix = 1.0e-3/cosmos.angular_diameter_distance(gal_list['Z']).value * 206265. / pixel_scale
     
     outfile = open(outpath+'simulatedSample_%.2f.dat'%mag_limit, 'w')
-    outfile.write('#gal1_id gal2_id mag1 mag2 flux_ratio z1 z2 zest1 zest2 sep_kpc x01 y01 x02 y02 mass1 mass2\n')
+    outfile.write('#ID gal1_id gal2_id mag1 mag2 flux_ratio z1 z2 ')
+    outfile.write('zest1 zest2 sep_kpc x01 y01 x02 y02\n')
     
     peakoutfile = open(outpath+'input_peakfilter_%.2f.dat'%mag_limit, 'w')
+    peakoutfile.write('ID FILENAME Z MAG\n')
 
+    count = 0
     for pair in range(len(selected)):
         gal1 = gal_list[selected[pair]]
+        if paired[pair] < 0:
+            continue
         gal2 = gal_list[paired[pair]]
         
-        fluxratio = 10.0**(-0.4*np.abs(gal1['mag']-gal2['mag']))
-        magtot = -2.5*np.log10(10.0**(-0.4*gal1['mag']) +
-                                10.0**(-0.4*gal2['mag']))
+        fluxratio = 10.0**(-0.4*np.abs(gal1['MAG']-gal2['MAG']))
+        magtot = -2.5*np.log10(10.0**(-0.4*gal1['MAG']) +
+                                10.0**(-0.4*gal2['MAG']))
         
         try:
-            img1 = pyfits.open(impath + gal1['filename'])[0].data
-            img2 = pyfits.open(impath + gal2['filename'])[0].data
+            img1 = pyfits.open(impath + gal1['FILENAME'])[0].data
+            img2 = pyfits.open(impath + gal2['FILENAME'])[0].data
         except IOError:
-            print 'either ', impath + gal1['filename'],' or ',
-            print impath + gal2['filename'],'is missing'
-    
+            print 'either ', impath + gal1['FILENAME'],' or ',
+            print impath + gal2['FILENAME'],'is missing'
     
         img2noise = sigma_clip.sigclip(img2)[1]
 
@@ -124,20 +128,21 @@ def listStamps(infile, impath, outpath='.', mag_limit=20.5, ngal=2000):
                                        np.random.random()*2.0*np.pi, img2noise)
             compimg = img1 + img2_off
             hdu = pyfits.PrimaryHDU(compimg)
-            hdu.writeto(outpath+"imgs/%06d_%06d_%04.1f.fits"%(gal1['ident'],
-                                                   gal2['ident'], off),
+            hdu.writeto(outpath+"imgs/%06d_%06d_%04.1f.fits"%(gal1['ID'],
+                                                   gal2['ID'], off),
                         clobber=True)
     
-            outfile.write('%d %d %.2f %.2f %.2e %.2f %.2f %d %d %.1f %.1f %.1f %.1f %.1f %.2e %.2e\n' % (gal1['ident'], 
-             gal2['ident'], gal1['mag'], gal2['mag'],
-             fluxratio, 
-             gal1['z'], gal2['z'], gal1['zest'], gal2['zest'], off,
-            img1.shape[0]/2.0, img1.shape[1]/2.0, img1.shape[0]/2.0+delx,
-            img1.shape[1]/2.0+dely, gal1['logmass'], gal2['logmass']))
+            outfile.write('%6d %d %d %.2f %.2f %.2e %.2f %.2f %d %d %.1f %.1f %.1f %.1f %.1f\n' % (
+                count, gal1['ID'], gal2['ID'], gal1['MAG'], gal2['MAG'],
+                 fluxratio, 
+                 gal1['Z'], gal2['Z'], gal1['ZEST'], gal2['ZEST'], off,
+                img1.shape[0]/2.0, img1.shape[1]/2.0, img1.shape[0]/2.0+delx,
+                img1.shape[1]/2.0+dely))
             
-            peakoutfile.write('%06d%06d %06d_%06d_%04.1f.fits %.2f %.3e\n'%(
-            gal1['ident'],gal2['ident'], gal1['ident'], gal2['ident'],
-            off, gal1['z'], magtot))
+            peakoutfile.write('%6d %06d_%06d_%04.1f.fits %.2f %.3e\n'%(
+            count, gal1['ID'], gal2['ID'],
+            off, gal1['Z'], magtot))
+            count += 1
             
     outfile.close()
     peakoutfile.close()
@@ -147,20 +152,25 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description=__doc__,
               formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("inputlist", help='input list of galaxies')
-    parser.add_argument('-m', '--maglimit', help='magnitude limit of selected galaxies',
-                        default=23.0, dest='maglimit', type=float)
+    parser.add_argument("param_file", help="config parameter file (*.ini) for making mocks")
+    parser.add_argument('-o' '--outputpath', dest='outputpath', 
+                        help='output path for images and list file',
+                        default='')
     parser.add_argument('-i', '--impath', dest='impath',
-                        default='/data/cosmos_data/photodata/imgs/',
                         help='path to input images')
-               
-    parser.add_argument("-e", "--eps",
-                 action='store_true', default=False, help='make eps plots',
-                 dest='epsPlot')
+    parser.add_argument('--hubble', default=70.0, help='Hubble constant in flat LCDM', type=float)
+    parser.add_argument('--omegaM', default=0.3, help='Omega Matter in flat LCDM', type=float)
     args = parser.parse_args()
 
-    FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
-    ending='.eps' if args.epsPlot else '.png'
+    cParser = SafeConfigParser()
+    cParser.read(args.param_file)
     
-    listStamps(args.inputlist, args.impath, mag_limit=args.maglimit,
-               outpath=os.path.dirname(args.inputlist)+'/')
+    config_mocks = dict([(name, cParser.getfloat('list_stamps', name))
+                        for name in cParser.options('list_stamps')])
+    for category in ('offsets', 'morph_class', 'zlims'):
+        mylist = np.asarray([cParser.getfloat(category, n) for n in cParser.options(category)])
+        config_mocks[category] = mylist                    
+    
+    listStamps(args.inputlist, args.impath,
+               outpath=args.outputpath, H0=args.hubble, Om0=args.omegaM, **config_mocks)
     
