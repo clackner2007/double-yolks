@@ -418,8 +418,10 @@ def main():
         ending='.eps' if args.epsPlot else '.png'
         my_list = np.arange(len(gals))[(n_nucs >=2)]
         #rand = np.random.permutation(my_list)[:100]
-        s = makehtml(gals, my_list, FigCanvas,ending, args.path)
-        htmlFile = open(args.path+'/imgs.html', 'w')
+        if not os.path.exists(args.path+'/imgs'):
+            os.makedirs(args.path+'/imgs')
+        s = makehtml(gals, my_list, FigCanvas, ending, args.path)
+        htmlFile = open(args.path+'/imgs/imgs.html', 'w')
         htmlFile.write(s)
         htmlFile.close()
         
