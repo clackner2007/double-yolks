@@ -197,14 +197,15 @@ def main():
                         help='path to input images')
     parser.add_argument('-d', '--deltaz', default=0.0, type=float,
                         dest='delz',
-                        help='redshift offset from original image')
+                        help='redshift offset from original image, this code expects the shift to be applied\n'+
+                        'if the shift is not constant, add a DELZ column to the input file')
     parser.add_argument('-j', '--threads', default=1, dest='nthreads', 
                         help='number of threads to run', type=int)
     parser.add_argument('-r', '--ringInner', dest='r_in',
                         type=float, default=1.28,
-                        help='inner ring limit in units of the FWHM')
+                        help='inner ring limit in units of the FWHM (default=1.28 FWHM (3sigma))')
     parser.add_argument('-w', '--width', dest='ring_width', type=float,
-                        default=0.7, help='ring filter width in PIXELS')
+                        default=0.7, help='ring filter width in PIXELS (default=0.7 pixels)')
     parser.add_argument('-f', '--fwhm', default=None, dest='fwhm', type=float,
                         help="""FWHM of PSF in PIXELS for all input galaxies, if none(default)
                         the FWHM needs to be in the input file""")
