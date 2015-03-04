@@ -286,7 +286,9 @@ class Merger:
 
 
 def plotPeaks(mergers, path, impath, ending, FigCanvas, ngal=None):
-
+    """
+    makes images showing the peaks (real and fake) for mock mergers
+    """
     grpmerge = {}
     for m in mergers:
         key = (m.id1, m.id2)
