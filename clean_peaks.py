@@ -27,19 +27,9 @@ import astropy.wcs
 import pyfits
 from ConfigParser import SafeConfigParser
 
-########################
-def addCol(data, newarray, newname):
-    """
-    add a column to a record array
-    """
-    newarray=np.asarray(newarray)
-    newdtype = np.dtype(data.dtype.descr+[(newname, newarray.dtype)])
-    newdata = np.empty(data.shape, dtype=newdtype)
-    for field in data.dtype.fields:
-        newdata[field] = data[field]
-    newdata[newname] = newarray
+import configParams as config
 
-    return newdata
+
 
 class Nuclei():
 
@@ -58,7 +48,7 @@ class Nuclei():
 class Galaxy():
 
     def __init__(self, ident, z, mag, ang_dist, ang_dist_orig, ra=None, dec=None, imgfile=None,
-                 delz=0.0, zeropoint=25.959, pixelscale=0.03):
+                 delz=0.0):
         self.ra=ra
         self.dec=dec
         self.imgfile = imgfile
@@ -66,8 +56,8 @@ class Galaxy():
         self.ident = ident
         self.nuclei=[]
         self.ad = ang_dist
-        self.kpc_p_pix = (self.ad*1000.0)/(206265.0)*pixelscale
-        self.flux = 10**(-0.4*(mag - zeropoint))
+        self.kpc_p_pix = (self.ad*1000.0)/(206265.0)*config.pixelscale
+        self.flux = 10**(-0.4*(mag - config.zeropt))
         self.mag = mag
         self.delz = delz
         self.ad_orig = ang_dist_orig
@@ -269,8 +259,6 @@ def main():
     parser.add_argument("file_peaks", help="peak listing from peak_filter (peak_list)")
     parser.add_argument("param_file", help="config parameter file (*.ini) for cleaning peaks")
     parser.add_argument("-p", "--path", default='./', help='path to output', dest='path')
-    parser.add_argument('--hubble', default=70.0, help='Hubble constant in flat LCDM', type=float)
-    parser.add_argument('--omegaM', default=0.3, help='Omega Matter in flat LCDM', type=float)
     parser.add_argument('-x', '--pixels', dest='pixels', default=False, action='store_true',
                         help='output pair coordinates in clean_pairs.txt in pixels instead of ra/dec')
     parser.add_argument('-l', '--plot', dest='makePlots', default=False,
@@ -291,7 +279,7 @@ def main():
     g1 = table.Table().read(args.file_gal, format='ascii')
     p1 = table.Table().read(args.file_peaks, format='ascii')
 
-    cosmos = FlatLambdaCDM(H0=args.hubble, Om0=args.omegaM)  
+    cosmos = FlatLambdaCDM(H0=config.H0, Om0=config.Om0)  
     
     g1.add_column(table.Column(name='ang_dist', data=cosmos.angular_diameter_distance(g1['Z']).value))
     g1.add_column(table.Column(name='ang_dist_orig', 
@@ -330,8 +318,8 @@ def main():
     clean_params['dist_cut'] = (clean_params['dist_cut_1'], clean_params['dist_cut_2'])
     del clean_params['dist_cut_1']
     del clean_params['dist_cut_2']
-    clean_params['center'] = (clean_params['imsize_x']*0.5/gal_kwargs['pixelscale'],
-                             clean_params['imsize_y']*0.5/gal_kwargs['pixelscale'])
+    clean_params['center'] = (clean_params['imsize_x']*0.5/config.pixelscale,
+                             clean_params['imsize_y']*0.5/config.pixelscale)
     del clean_params['imsize_x']
     del clean_params['imsize_y']
     
@@ -365,7 +353,7 @@ def main():
         for p in np.asarray(g.nuclei):
             print >>f1, "%.5e"%(p.getDist(g.nuclei[maxN].x0,
                                          g.nuclei[maxN].y0,
-                                         scale=gal_kwargs['pixelscale'])),
+                                         scale=config.pixelscale)),
         for p in g.nuclei:
             print >>f1, "%.5e"%(p.allflux),
         print >>f1, ""
@@ -388,7 +376,7 @@ def main():
         goodp = np.asarray(g.nuclei)[g.good_nuclei(**clean_params)]
         for p in goodp:
             print >>f, "%.5e"%(p.getDist(goodp[maxN].x0,
-                                         goodp[maxN].y0, scale=gal_kwargs['pixelscale'])),
+                                         goodp[maxN].y0, scale=config.pixelscale)),
             print >>fpeaks, "%.3f %.3f"%(p.x0, p.y0),
 
         for p in goodp:
