@@ -21,7 +21,6 @@ import matplotlib.figure as figure
 from matplotlib.backends.backend_ps import FigureCanvasPS as FigCanvasPS
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigCanvasA
 
-from compare_mocks import plotcomplete
 from scipy.stats import spearmanr, percentileofscore
 import pyfits
 import line_fits
@@ -334,7 +333,7 @@ def cumComplete(value, selected, bins=10, cum=False):
         
 def cumContaim(realvalue, measvalue, bins=10, cum=True):
     """
-    returns the fraction of 
+    returns cumulative contaminations
     """
     #realval, bins1 = np.histogram(realvalue, bins=bins)
     #ratio = np.cumsum(realval)*1.0/(np.cumsum(realval[::-1])[::-1])
@@ -343,6 +342,56 @@ def cumContaim(realvalue, measvalue, bins=10, cum=True):
     contam = np.array([len(realvalue[(measvalue>bb)&(realvalue<bb)]) for bb in bins1[:-1]])
     frac = contam*1.0/(np.cumsum(measval[::-1])[::-1])
     return bins1[:-1], frac
+
+
+def plotcomplete(ax, prop, measprop, restrict, isdbl, risdbl, nbins=15,
+                 name='property', split=True, bw=False, log=False, points=False):
+    """
+    plots the completeness and the error in the measured parameter (if split==True)
+    """
+    denom, bins = np.histogram(prop, bins=nbins)
+    d2, bins2 = np.histogram(prop[restrict], bins=nbins)
+    d2 *= 1.0
+    denom *= 1.0
+    d4 = np.histogram(prop[isdbl], bins=bins)[0]*1.0
+    dblrest = np.histogram(prop[risdbl&restrict], bins=bins2)[0]*1.0
+    err1=np.sqrt(d4/denom**2 + d4**2/(denom**3))
+    err2 = np.sqrt(dblrest/d2**2 + dblrest**2/d2**3)
+    color1='b' if not bw else 'k'
+    color2='c' if not bw else 'darkgray'
+    ax.plot(bins[:-1], d4/denom, color=color1, linestyle='solid',
+                #yerr=err1, color='b', ls='solid', marker=None,
+                label=r'$\mathrm{total sample}$', marker='o' if points else 'None')
+    ax.plot(bins2[:-1], dblrest/d2, color=color2, linestyle='solid', 
+            lw=2., label=r'$\mathrm{restricted\ sample}$', marker='o' if points else 'None')
+    if points:
+        ax.errorbar(bins[:-1], d4/denom, yerr=np.sqrt(d4+d4**2/denom)/denom,
+                    color=color1, ls='none', marker='None')
+        ax.errorbar(bins2[:-1], dblrest/d2, yerr=np.sqrt(dblrest+dblrest**2/d2)/d2,
+                    color=color2, ls='none', marker='None', )
+    ax.set_ylabel(r'$\mathrm{completeness}$', size=10)
+    ax.tick_params(labelsize=9)
+    if log:
+        ax.set_xscale('log')
+    
+    if split:
+        ax.tick_params(labelbottom='off')
+        div = make_axes_locatable(ax)
+        axlower = div.append_axes("bottom",1.2, sharex=ax)
+        axlower.set_xlabel(name, size=10)
+        axlower.plot(prop[isdbl], (measprop[isdbl]/prop[isdbl]-1), marker='.',
+                     ls='none', color=color1,
+                     ms=3)
+        axlower.plot(prop[risdbl&restrict], 
+                     (measprop[risdbl&restrict]/prop[risdbl&restrict]-1), 
+                    marker='.', color=color2, ls='none',
+                     ms=3)
+        axlower.axhline(0, color='k')
+        axlower.tick_params(labelsize=9)
+        axlower.yaxis.set_major_locator(MaxNLocator(prune='upper', nbins=5))
+        axlower.set_ylabel(r'$\mathrm{fractional\ error}$', size=10)
+        return axlower
+    ax.set_xlabel(name, size=10)
 
 
 def main():
