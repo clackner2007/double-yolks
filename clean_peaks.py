@@ -356,11 +356,11 @@ def main():
     else:
         print >>fpairs, "X0_P0 Y0_P0 X0_P1 Y0_P1 FLUX_P0 FLUX_P1"
     
-    for g in gals[np.where(np.array([g.num_nuclei(mask=False) for g in gals])>=2)[0]]:
+    for g in gals:
         maxN = g.getMaxNuc(masked=False)
         print >>f1,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
                                                  g.dec if g.dec else np.NaN,
-                                                 g.getPearsonR(),     
+                                                 g.getPearsonR(masked=False),     
                                                 g.num_nuclei(mask=False)),
         for p in np.asarray(g.nuclei):
             print >>f1, "%.5e"%(p.getDist(g.nuclei[maxN].x0,
@@ -371,43 +371,47 @@ def main():
         print >>f1, ""
     
     
-    for g in gals[in_pairs]:
+    for g in gals[n_nucs>0]:
         print >>f,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
                                                 g.dec if g.dec else np.NaN,
                                                 g.getPearsonR(),
                                                g.num_nuclei(**clean_params)),
-        print >>fpairs,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
-                                                     g.dec if g.dec else np.NaN,
-                                                     g.getPearsonR(),
-                                                   g.num_nuclei(**clean_params)),
+        if g in gals[in_pairs]:
+            print >>fpairs,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
+                                                         g.dec if g.dec else np.NaN,
+                                                         g.getPearsonR(),
+                                                       g.num_nuclei(**clean_params)),
         print >>fpeaks, "%6d %.3f"%(g.ident, g.z),
+        
         maxN = g.getMaxNuc(masked=True, **clean_params)
         
         goodp = np.asarray(g.nuclei)[g.good_nuclei(**clean_params)]
         for p in goodp:
             print >>f, "%.5e"%(p.getDist(goodp[maxN].x0,
-                                         goodp[maxN].y0,
-                                         scale=gal_kwargs['pixelscale'])),
+                                         goodp[maxN].y0, scale=gal_kwargs['pixelscale'])),
             print >>fpeaks, "%.3f %.3f"%(p.x0, p.y0),
 
         for p in goodp:
             print >>f, "%.5e"%(p.allflux),
+
         print >>f,''
         print >>fpeaks,""
-        
-        order = sorted(range(len(goodp)), key=lambda k: goodp[k].flux, reverse=True)
-        p0 = goodp[order[0]]
-        p1 = goodp[order[1]]
-        print >>fpairs, "%.5f %.5e "%(p1.getDist(p0.x0, p0.y0, scale=g.kpc_p_pix), p1.allflux/p0.allflux),
-        if doRaDec:
-            coords = g.wcs.all_pix2world([p0.x0, p1.x0], [p0.y0, p1.y0], 0)
-            print >>fpairs, "%.6f %.6f %.6f %.6f %.3e %.3e"%(coords[0][0], coords[1][0],
-                                                             coords[0][1], coords[1][1],
-                                                             p0.allflux, p1.allflux)
-        else:
-            print >>fpairs, "%.3f %.3f %.3f %.3f %.3e %.3e"%(p0.x0, p0.y0, p1.x0, p1.y0, 
-                                                             p0.allflux, p1.allflux)
-        
+      
+        if len(goodp) >= 2:
+            order = sorted(range(len(goodp)), key=lambda k: goodp[k].flux, reverse=True)
+            p0 = goodp[order[0]]
+            p1 = goodp[order[1]]
+            print >>fpairs, "%.5f %.5e "%(p1.getDist(p0.x0, p0.y0, scale=g.kpc_p_pix), p1.allflux/p0.allflux),
+            if doRaDec:
+                coords = g.wcs.all_pix2world([p0.x0, p1.x0], [p0.y0, p1.y0], 0)
+                print >>fpairs, "%.6f %.6f %.6f %.6f %.3e %.3e"%(coords[0][0], coords[1][0],
+                                                                 coords[0][1], coords[1][1],
+                                                                p0.allflux, p1.allflux)
+            else:
+                print >>fpairs, "%.3f %.3f %.3f %.3f %.3e %.3e"%(p0.x0, p0.y0, p1.x0, p1.y0, 
+                                                                 p0.allflux, p1.allflux)
+
+
     f.close()
     fpeaks.close()
     f1.close()
