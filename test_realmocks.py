@@ -15,68 +15,61 @@ program details
 import sys, os, re
 import argparse
 import numpy as np
+from collections import defaultdict
 
 import matplotlib.figure as figure
 from matplotlib.backends.backend_ps import FigureCanvasPS as FigCanvasPS
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigCanvasA
-from cosm_distTable import CosmoDist
 
 from compare_mocks import plotcomplete
 from scipy.stats import spearmanr, percentileofscore
 import pyfits
 import line_fits
 
+import astropy.table
+from astropy.cosmology import FlatLambdaCDM
+import configParams as config
 
-
-def readMergers(infolder, origfile, clean=False):
+def readMergers(inputfolder, origfile, clean=False):
     """
     read in a set of mock mergers, including where the merger was finally detected
     """
+    with open(inputfolder+'cleaned_peaks_sources.txt') as pSrc, open(inputfolder+'cleaned_peaks.txt') as pXY:
+        linesSrc = pSrc.readlines()
+        linesPxy = pXY.readlines()
+        peaks = {}
+        for i in range(len(linesSrc)):
+            fields = linesSrc[i].split()
+            galid = int(fields[0])
+            npeaks = int(fields[5])
+            peaks[galid] = defaultdict(list)
+            for p in range(npeaks):
+                x0 = linesPxy[i].split()[2+2*p]
+                y0 = linesPxy[i].split()[2+2*p+1]
+                flux = fields[6+npeaks+p]
+                peaks.append((x0,y0,flux))
+    
     mergers = list()
-    realpairid, realpairsep = np.loadtxt(infolder+'foo2', usecols=(0,2), 
-                                         dtype=[('id', int), ('sep', float)], unpack=True)
-    realpairs = map(lambda x, y: '%d%.2f'%(x,y), realpairid, realpairsep)
-    with open(origfile) as f1, open(infolder+'peak_list') as f2:
-        lines = f1.readlines()[:]
-        z, npeak = np.loadtxt(infolder+'gal_list_match', usecols=(1,9),
-                              dtype=[('a', float), ('b', int)], unpack=True)
-        ang_dist = CosmoDist().ang_dist(z)
-        for indl, line in enumerate(lines[1:]):
-            fields = line.split()
-            
-            mergers.append(Merger(**{'id1':int(fields[0]),
-                                   'id2':int(fields[1]), 'z':float(fields[5]), 
-                                    'flux':10.0**(-0.4*(float(fields[2])-25.959))+
-                                            10.0**(-0.4*(float(fields[3])-25.959)),
-                                    'sepkpc':float(fields[9]),
-                                    'sepas':float(fields[9])*1.e-3/ang_dist[indl]*206265.,
-                                    'zest1':int(fields[7]), 
-                                    'zest2':int(fields[8]),
-                                    'x01':float(fields[10]), 
-                                    'y01':float(fields[11]), 
-                                    'x02':float(fields[12]), 
-                                    'y02':float(fields[13]),
-                                    'fluxratio':float(fields[4]),
-                                    'mass':np.log10(10.0**(float(fields[14]))+
-                                    10.0**(float(fields[15]))),
-                                    'mass1':10.0**(float(fields[14])),
-                                    'mass2':10.0**(float(fields[15])),
-                                    'angdist_kpc':ang_dist[indl]*1000.,
-                                    'nuv':float(fields[-3]),
-                                    'r':float(fields[-2]),
-                                    'j':float(fields[-1])}))
-            
-            for ip in range(npeak[indl]):
-                pline = f2.readline().split()
-                mergers[-1].addPeak(**{'x0':float(pline[6]), 'y0':float(pline[7]),
-                                    'flux':float(pline[-1]), 'ellip':float(pline[5])})
+    origGals = astropy.table.Table().read(origfile)
+    cosmos = FlatLambdaCDM(H0=config.H0, Om0=config.Om0)
+    ang_dist_kpc = cosmos.angular_diameter_distance(origGals['Z1']).to('kpc').value
+    for indg, g in enumerate(origGals):
+        merger_kwargs = dict([(c, g[c]) for c in origGals.colnames])
+        merger_kwargs['flux'] = (10.0**(-0.4*(g['mag1']-config.zeropt)) + 
+                                10.0**(-0.4*(g['mag2']-config.zeropt)))
+        merger_kwargs['sepas'] = merger_kwargs['sep_kpc']/ang_dist_kpc[indg] * 206265.
+        merger_kwargs['ang_dist_kpc'] = ang_dist_kpc[indg]
+        mergers.append(Merger(**merger_kwargs))
         
-            if clean:
-                mergers[-1].cleanPeaks(totfluxcut=0.03, centcut=10., distcut=(2.2,8.0), fluxRcut=0.25)
-                
-            mergers[-1].assignRealPeaks()
-            if '%d%06d%.2f'%(mergers[-1].id1, mergers[-1].id2, mergers[-1].sepkpc) in realpairs:
-                mergers[-1].setReal()
+        if g['ID'] in peaks:
+            for p in peaks[g['ID']]:
+                mergers[-1].addPeak(**zip(['x0', 'y0', 'flux'], p))
+        if clean:
+            #this will remove peaks, but right now, I'm assuming that's already done
+            #mergers[-1].cleanPeaks()
+            pass
+        
+        mergers[-1].assignRealPeaks()
                                 
     return mergers
 
@@ -96,8 +89,8 @@ class Peak:
         return np.sqrt((x-self.x0)**2 + (y-self.y0)**2) *scaling
         
     def __cmp__(self, other):
-        return int(np.sign(self.distTo(0.0, 0.0)-
-                       other.distTo(0.0, 0.0)))   
+        return int(np.sign(self.distTo(config.cutoutX*0.5, config.cutoutY*0.5)-
+                       other.distTo(config.cutoutX*0.5, config.cutoutY*0.5)))
         
     def __repr__(self):
         return '(%.2f, %.2f)-%.3e'%(self.x0, self.y0, self.flux)
@@ -110,10 +103,9 @@ class Merger:
             setattr(self, key, val)
         self.peaklist = list()
         self.mag = -2.5*np.log10(self.flux)+25.959
-        self.isdetdbl = False
         
     def setReal(self):
-        self.isdetdbl = True
+        self.isdbl = True
     
     def toKpc(self, arcsec):
         return arcsec / 206265.0 * self.angdist_kpc
@@ -125,14 +117,15 @@ class Merger:
         self.peaklist.append(Peak(**kwargs))
         self.peaklist[-1].isGal1 = False
         self.peaklist[-1].isGal2 = False
-        self.peaklist.sort()#key = lambda p1: p1.distTo(268./2., 268./2.))
+        self.peaklist.sort()
         
     def cleanPeaks(self, ecut=0.0, centcut=100.0, totfluxcut=0.0, fluxRcut=0.0,
                    distcut=(0.0,100.0)):
                        
         if len(self.peaklist) > 0:
             self.peaklist = [p for p in self.peaklist if 
-            ((self.toKpc(p.distTo(268./2., 268./2., scaling=0.03)) < centcut) &
+            ((self.toKpc(p.distTo(config.cutoutX/2., config.cutoutY/2., 
+                                  scaling=config.pixelscale)) < centcut) &
             (p.ellip > ecut) & (p.flux/self.flux >= totfluxcut))]
            
         if len(self.peaklist) > 0:
@@ -142,8 +135,8 @@ class Merger:
 
             self.peaklist = [p for p in self.peaklist if 
             (p.flux==maxFlux)|((p.flux/maxFlux > fluxRcut) &
-            (self.toKpc(p.distTo(xM, yM, scaling=0.03)) < distcut[1]) & 
-            (self.toKpc(p.distTo(xM, yM, scaling=0.03)) >= distcut[0]))]
+            (self.toKpc(p.distTo(xM, yM, scaling=config.pixelscale)) < distcut[1]) & 
+            (self.toKpc(p.distTo(xM, yM, scaling=config.pixelscale)) >= distcut[0]))]
         
     def assignRealPeaks(self, thresh=8):
         
