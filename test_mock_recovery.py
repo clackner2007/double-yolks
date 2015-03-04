@@ -25,96 +25,63 @@ from scipy.stats import spearmanr, percentileofscore
 
 
 def main():
-
     parser = argparse.ArgumentParser(description=__doc__,
               formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("infolder", help='folder with peak finding output')
     parser.add_argument('origfile', help='file with real merger info')
-    parser.add_argument('-i', '--impath', dest='impath', default='./',
+    parser.add_argument('-o', '--outpath', dest='outpath', default='./',
                         help='path to image output')
     parser.add_argument("-e", "--eps",
                  action='store_true', default=False, help='make eps plots',
                  dest='epsPlot')
+    parser.add_argument("-m", "--images", nargs=1, dest='nimages', 
+                        help='plot images of mocks with detected peaks\n(default=0)',
+                        default=0)
     args = parser.parse_args()
     
-    
-    imCent = (268./2.0, 268.0/2.0)
-    mergers = list()
-    tfc = 0.01
-    desired_fr = 0.25
-    cut_fr = 0.00
-
-
-    mergers = np.asarray(readMergers(args.infolder, args.origfile))
-    for m in mergers:
-        m.cleanPeaks(centcut=10., totfluxcut=tfc)
-        m.assignRealPeaks()
-        #m.isdbl = m.isdetdbl & m.isdbl
-        
-            
     FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
     ending='.eps' if args.epsPlot else '.png'
 
-    mergers = np.asarray(mergers)
-    if False:
+    desired_fr = 0.25 #desired flux ratio we want to be sensitive down to (exclude 'minor' mergers)
+    sep_kpc_min = 2.2 #minimum REAL separation we expect to measure
+    sep_kpc_max = 8.0 #maximum REAL separation we expect to measure 
+                        #(note the sims aren't separated by more than 10 kpc)
+    
+    mergers = np.asarray(readMergers(args.infolder, args.origfile))
+
+    #plot images for the first nimages mocks you could imagine only doing certain kinds here, etc.
+    if args.nimages:
         plotPeaks(mergers, os.path.dirname(args.origfile)+'/imgs/', 
-                  args.impath, ending, FigCanvas, ngal=20)
-        ee = np.asarray([(m.zest1==1)&(m.zest2==1) for m in mergers])
-        for m in mergers[5:200:8]:
-            print len(m.peaklist), m.getMeasPeak1(), 
-            print m.getMeasPeak2(), m.x01, m.y01, m.x02, m.y02
-        plotPeaks(mergers[ee],
-                  os.path.dirname(args.origfile)+'/imgs/', 
-                args.impath+'zest11_', ending, FigCanvas, ngal=20)
+                  args.impath, ending, FigCanvas, ngal=args.nimages)
+    
 
 
+    #what follows is a list of possible tests looking at the galaxies
+    #i've included tests with different zest (morphology parameters)
+    #but you can imagine doing lots of things if you've stored those parameters in
+    #the simulatedSample file, they'll be read in in the mergers
     redshift = np.array([m.z for m in mergers])
-    sepkpc = np.array([m.sepkpc for m in mergers])
+    sepkpc = np.array([m.sep_kpc for m in mergers])
     fluxratio = np.array([m.fluxratio for m in mergers])
     zest1 = np.array([m.zest1 for m in mergers])
     zest2 = np.array([m.zest2 for m in mergers])
     mass = np.array([m.mass for m in mergers])
-    mag = np.array([-2.5*np.log10(m.flux)+25.959 for m in mergers])
+    mag = np.array([-2.5*np.log10(m.flux)+config.zeropt for m in mergers])
     measfluxratio = np.array([m.measFlux12() for m in mergers])
     isdbl = np.array([m.isdbl for m in mergers])
     zest11 = (zest1==1)&(zest2==1)
     zest12 = ((zest1==1)|(zest2==1))&(zest1<3)&(zest2<3)
     zest22 = (zest1==2)&(zest2==2)
-    zestcut = np.in1d(zest1, [1,2]) & np.in1d(zest2, [1,2])#(zest1==zest1)&(zest2==zest2)#(zest1!=3)&(zest2!=3)
-    masscut = mass>10.6
-    magcut = mag < 20
-    restrict = ((sepkpc > 2.2)&zestcut&(masscut)&(sepkpc<8.0)&(fluxratio>desired_fr))
-    restrictM = zestcut&(masscut)
+    zestcut = np.in1d(zest1, [1,2]) & np.in1d(zest2, [1,2])
+    
+    #only look at sources with a REAL separation btw. 2.2 and 8 kpc
+    #and reasonable morphologies and flux ratios > desired_fr
+    #NOTE: for the completenesses to be reasonable these shouldn't be more restrictive than
+    #the cuts used to select the peaks
+    restrict = ((sepkpc > sep_kpc_min) & zestcut & (sepkpc<sep_kpc_max) & (fluxratio>desired_fr))
     print len(mergers[restrict])
-    for m in mergers[restrict & (zest1==1) & (zest2==1) & (sepkpc==5.0)]:
-        print m.id1, m.id2, m.isdbl, m.sepkpc, m.fluxratio, m.detect1, m.detect2
-
-    fig = figure.Figure((6,6))
-    canv = FigCanvas(fig)
-    subs = makesubplots(fig, nx=1, ny=1)
-    ax = subs.next()
-    color = np.array(['r' if (m.zest1==1)&(m.zest2==1) else 
-                    ('b' if (m.zest1==2)&(m.zest2==2) else 'g')
-                    for m in mergers])
-    ax.scatter(np.array([min(m.mass1/m.mass2, m.mass2/m.mass1) for m in mergers])[restrictM],
-               fluxratio[restrictM], c=color[restrict], alpha=0.1, lw=0)
-    print spearmanr(np.array([min(m.mass1/m.mass2, m.mass2/m.mass1) for m in mergers])[restrictM],
-               fluxratio[restrictM])
-    print spearmanr(np.array([min(m.mass1/m.mass2, m.mass2/m.mass1) for m in mergers])[restrictM&zest11],
-               fluxratio[restrictM&zest11])
-    print spearmanr(np.array([min(m.mass1/m.mass2, m.mass2/m.mass1) for m in mergers])[restrictM&zest12],
-               fluxratio[restrictM&zest12])
-    print spearmanr(np.array([min(m.mass1/m.mass2, m.mass2/m.mass1) for m in mergers])[restrictM&zest22],
-               fluxratio[restrictM&zest22])
-    print line_fits.robustPolyFit(np.array([min(m.mass1/m.mass2, m.mass2/m.mass1) for m in mergers])[restrictM],
-               fluxratio[restrictM], 1)
-    ax.set_xlabel('mass ratio')
-    ax.set_ylabel('flux ratio')
-    ax2 = ax.twinx()
-    ax2.hist(np.array([min(m.mass1/m.mass2, m.mass2/m.mass1) for m in mergers])[restrictM],
-             bins=7, histtype='step', color='k')
-    fig.savefig(args.impath+'flux_mass_ratio'+ending)
-
+    
+    #show plots of the completeness as a function of lots of things
     fig = figure.Figure((12,12))
     canv = FigCanvas(fig)
     subs = makesubplots(fig, nx=2)
@@ -129,30 +96,25 @@ def main():
     
     ax = subs.next()
     plotcomplete(ax, sepkpc, np.array([m.measSep12() for m in mergers]), 
-                 (fluxratio>0.4)&zestcut&(masscut), 
-                 np.array([m.isdbl for m in mergers]),
-                np.array([m.isdbl for m in mergers]), name='separation',
-                split=True, nbins=[0,1.0,1.75,2.25,2.75,4.0,6.0,9.0,11.0])
+                 zestcut&(fluxratio>desired_fr), isdbl, isdbl, name='separation',
+                 split=True, nbins=[0,1.0,1.75,2.25,2.75,4.0,6.0,9.0,11.0])
                 
     ax.set_ylim((0,1.1))
            
     ax = subs.next()
     plotcomplete(ax, fluxratio, np.array([m.measFlux12() for m in mergers]), 
-                 (sepkpc>2.2)&(sepkpc<8.0)&zestcut&(masscut), 
+                 restrict, 
                  isdbl, isdbl, name='flux ratio',
                 split=True, nbins=10)
     ax2 = ax.twinx()
     ax2.hist(fluxratio, histtype='step', bins=10, color='k', ls='dotted')
-#    print np.percentile(np.array([m.measFlux12() 
-#        for m in mergers[(fluxratio<0.3)&restrict&isdbl]])/
-#    fluxratio[isdbl&restrict&(fluxratio<0.3)], (10,25,50,75,90))
-    #sys.exit()
+
     ax.set_ylim((0,1.1))
                 
     ax = subs.next()
-    ax.scatter(fluxratio[isdbl&masscut&zestcut], 
-               np.array([m.measFlux12() for m in mergers[isdbl&masscut&zestcut]]),
-               c=redshift[isdbl&masscut&zestcut], lw=0, alpha=0.5)
+    ax.scatter(fluxratio[isdbl&restrict], 
+               np.array([m.measFlux12() for m in mergers[isdbl&restrict]]),
+               c=redshift[isdbl&restrict], lw=0, alpha=0.5)
     ax.tick_params(labelsize=8)
     ax.set_xlabel('input flux ratio', size=10)
     ax.set_ylabel('meas. flux ratio', size=10)
@@ -162,10 +124,10 @@ def main():
     ax.set_ylim((0.005,1.1))
     ax.plot([1.e-3,1],[1.e-3,1], 'k-')
     print 'fit to real flux-measured flux ratio',
-    print np.polyfit((fluxratio[isdbl&masscut&zestcut]),np.array([m.measFlux12() 
-               for m in mergers[isdbl&masscut&zestcut]]),1)
+    print np.polyfit((fluxratio[isdbl&restrict]),np.array([m.measFlux12() 
+               for m in mergers[isdbl&restrict]]),1)
     print 'spearman-r real flux-measured flux ratio',
-    print spearmanr(fluxratio[isdbl&masscut&zestcut], 
+    print spearmanr(fluxratio[isdbl&restrict], 
                np.array([m.measFlux12() 
                for m in mergers[isdbl&masscut&zestcut]]))
     
@@ -179,16 +141,15 @@ def main():
     ax.set_ylim((0,1.1))
     
     ax = subs.next()
-    ax.scatter(sepkpc[isdbl&zestcut&masscut], 
-               np.array([m.measSep12() for m in mergers[isdbl&zestcut&masscut]]),
-               c=mag[isdbl&masscut&zestcut], lw=0, alpha=0.5)
+    ax.scatter(sepkpc[isdbl&zestcut], 
+               np.array([m.measSep12() for m in mergers[isdbl&zestcut]]),
+               c=mag[isdbl&zestcut], lw=0, alpha=0.5)
     ax.tick_params(labelsize=8)
     ax.set_xlabel('input sep kpc', size=10)
     ax.set_ylabel('meas. sep kpc', size=10)
     ax.plot([0,11],[0,11], 'k-')
     
-
-    fig.savefig(args.impath+'z_complete_2lt_off_lt5'+ending)
+    fig.savefig(args.impath+'completeness_scatter'+ending)
     
     
     #contamination plots
