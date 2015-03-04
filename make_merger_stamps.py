@@ -17,11 +17,29 @@ import argparse
 import numpy as np
 import pyfits
 import sigma_clip
+import astropy.io
 
 from astropy import table
 from astropy.cosmology import FlatLambdaCDM
+import astropy.wcs
 
 from ConfigParser import SafeConfigParser
+
+
+#######################################
+def makeWCS(image):
+    """
+    make a WCS centered on the central pixel in the image
+    """
+    sx, sy = image.shape
+    wcs = astropy.wcs.WCS(naxis=2)
+    wcs.wcs.crpix = np.array([sx/2.0, sy/2.0])
+    wcs.wcs.crval = np.array([0.0,0.0])
+    wcs.wcs.cunit = np.array(["pix", "pix"])
+    #wcs.wcs.cd = np.array([[1.0,0.0],[0.0,1.0]])
+    #wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    
+    return wcs
 
 #######################################
 def moveImage(image, delta_r, phi, noiseadd):
@@ -115,8 +133,8 @@ def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3,
                                 10.0**(-0.4*gal2['MAG']))
         
         try:
-            img1 = pyfits.open(impath + gal1['FILENAME'])[0].data
-            img2 = pyfits.open(impath + gal2['FILENAME'])[0].data
+            img1 = astropy.io.fits.open(impath + gal1['FILENAME'])[0].data
+            img2 = astropy.io.fits.open(impath + gal2['FILENAME'])[0].data
         except IOError:
             print 'either ', impath + gal1['FILENAME'],' or ',
             print impath + gal2['FILENAME'],'is missing'
@@ -127,7 +145,8 @@ def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3,
             img2_off, delx, dely = moveImage(img2, off*to_pix[selected[pair]],
                                        np.random.random()*2.0*np.pi, img2noise)
             compimg = img1 + img2_off
-            hdu = pyfits.PrimaryHDU(compimg)
+            wcs = makeWCS(compimg)
+            hdu = astropy.io.fits.PrimaryHDU(compimg, header=wcs.to_header())
             hdu.writeto(outpath+"imgs/%06d_%06d_%04.1f.fits"%(gal1['ID'],
                                                    gal2['ID'], off),
                         clobber=True)
