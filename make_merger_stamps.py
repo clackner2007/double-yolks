@@ -24,7 +24,7 @@ from astropy.cosmology import FlatLambdaCDM
 import astropy.wcs
 
 from ConfigParser import SafeConfigParser
-
+import configParams as config
 
 #######################################
 def makeWCS(image):
@@ -89,7 +89,7 @@ def getMatch(selected, gal_list, delz=0.03, zests=[1,2,3]):
 
 ##############################
 def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3, 
-               mag_limit=20.5, ngal=2000, pixel_scale=0.03,
+               mag_limit=20.5, ngal=2000, 
                zlims=[0.2,1.1], offsets = np.array([0.5, 1.5, 2.0, 2.5, 3.0, 5.0, 7.0, 10.0]), 
                 morph_class=[1,2,3]):
     """
@@ -110,9 +110,9 @@ def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3,
     print paired
     
     #offsets in kpc
-    cosmos = FlatLambdaCDM(H0=args.hubble, Om0=args.omegaM)  
+    cosmos = FlatLambdaCDM(H0=H0, Om0=Om0)  
 
-    to_pix = 1.0e-3/cosmos.angular_diameter_distance(gal_list['Z']).value * 206265. / pixel_scale
+    to_pix = 1.0e-3/cosmos.angular_diameter_distance(gal_list['Z']).value * 206265. / config.pixelscale
     
     outfile = open(outpath+'simulatedSample_%.2f.dat'%mag_limit, 'w')
     outfile.write('#ID gal1_id gal2_id mag1 mag2 flux_ratio z1 z2 ')
@@ -177,8 +177,6 @@ if __name__=='__main__':
                         default='')
     parser.add_argument('-i', '--impath', dest='impath',
                         help='path to input images')
-    parser.add_argument('--hubble', default=70.0, help='Hubble constant in flat LCDM', type=float)
-    parser.add_argument('--omegaM', default=0.3, help='Omega Matter in flat LCDM', type=float)
     args = parser.parse_args()
 
     cParser = SafeConfigParser()
@@ -191,5 +189,5 @@ if __name__=='__main__':
         config_mocks[category] = mylist                    
     
     listStamps(args.inputlist, args.impath,
-               outpath=args.outputpath, H0=args.hubble, Om0=args.omegaM, **config_mocks)
+               outpath=args.outputpath, H0=config.H0, Om0=config.Om0, **config_mocks)
     
