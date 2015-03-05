@@ -65,20 +65,16 @@ def main():
     fluxratio = np.array([m.fluxratio for m in mergers])
     zest1 = np.array([m.zest1 for m in mergers])
     zest2 = np.array([m.zest2 for m in mergers])
-    mass = np.array([m.mass for m in mergers])
     mag = np.array([-2.5*np.log10(m.flux)+config.zeropt for m in mergers])
     measfluxratio = np.array([m.measFlux12() for m in mergers])
     isdbl = np.array([m.isdbl for m in mergers])
-    zest11 = (zest1==1)&(zest2==1)
-    zest12 = ((zest1==1)|(zest2==1))&(zest1<3)&(zest2<3)
-    zest22 = (zest1==2)&(zest2==2)
     zestcut = np.in1d(zest1, [1,2]) & np.in1d(zest2, [1,2])
     
     #only look at sources with a REAL separation btw. 2.2 and 8 kpc
     #and reasonable morphologies and flux ratios > desired_fr
     #NOTE: for the completenesses to be reasonable these shouldn't be more restrictive than
     #the cuts used to select the peaks
-    restrict = ((sepkpc > sep_kpc_min) & zestcut & (sepkpc<sep_kpc_max) & (fluxratio>desired_fr))
+    restrict = ((sepkpc > sep_kpc_min) & (sepkpc<sep_kpc_max) & (fluxratio>desired_fr))
     print len(mergers[restrict])
     
     #show plots of the completeness as a function of lots of things
@@ -86,6 +82,7 @@ def main():
     canv = FigCanvas(fig)
     subs = makesubplots(fig, nx=2)
     ax = subs.next()
+    #redshift completeness
     plotcomplete(ax, redshift, redshift, 
                  restrict, isdbl, isdbl, name='redshift', 
                  split=False, nbins=10)
@@ -95,6 +92,7 @@ def main():
     ax.set_ylim((0,1.1))
     
     ax = subs.next()
+    #completeness as a fcn of separation
     plotcomplete(ax, sepkpc, np.array([m.measSep12() for m in mergers]), 
                  zestcut&(fluxratio>desired_fr), isdbl, isdbl, name='separation',
                  split=True, nbins=[0,1.0,1.75,2.25,2.75,4.0,6.0,9.0,11.0])
@@ -102,6 +100,7 @@ def main():
     ax.set_ylim((0,1.1))
            
     ax = subs.next()
+    #completeness as a function of flux ratio
     plotcomplete(ax, fluxratio, np.array([m.measFlux12() for m in mergers]), 
                  restrict, 
                  isdbl, isdbl, name='flux ratio',
@@ -110,10 +109,11 @@ def main():
     ax2.hist(fluxratio, histtype='step', bins=10, color='k', ls='dotted')
 
     ax.set_ylim((0,1.1))
-                
+    
+    #comparison of measured and real flux ratios
     ax = subs.next()
     ax.scatter(fluxratio[isdbl&restrict], 
-               np.array([m.measFlux12() for m in mergers[isdbl&restrict]]),
+               measufluxratio[isdbl&restrict],
                c=redshift[isdbl&restrict], lw=0, alpha=0.5)
     ax.tick_params(labelsize=8)
     ax.set_xlabel('input flux ratio', size=10)
@@ -124,13 +124,14 @@ def main():
     ax.set_ylim((0.005,1.1))
     ax.plot([1.e-3,1],[1.e-3,1], 'k-')
     print 'fit to real flux-measured flux ratio',
-    print np.polyfit((fluxratio[isdbl&restrict]),np.array([m.measFlux12() 
-               for m in mergers[isdbl&restrict]]),1)
+    print np.polyfit((fluxratio[isdbl&restrict]),
+                     measfluxratio[isdbl&restrict], 1)
     print 'spearman-r real flux-measured flux ratio',
     print spearmanr(fluxratio[isdbl&restrict], 
                np.array([m.measFlux12() 
                for m in mergers[isdbl&masscut&zestcut]]))
     
+    #completeness as a function of magnitude
     ax = subs.next()
     plotcomplete(ax, mag, mag, 
                  restrict, isdbl, isdbl, name='magnitude',
@@ -140,6 +141,7 @@ def main():
             histtype='step', color='k', ls='dotted')
     ax.set_ylim((0,1.1))
     
+    #meausred vs. real separation in kpc
     ax = subs.next()
     ax.scatter(sepkpc[isdbl&zestcut], 
                np.array([m.measSep12() for m in mergers[isdbl&zestcut]]),
@@ -149,336 +151,26 @@ def main():
     ax.set_ylabel('meas. sep kpc', size=10)
     ax.plot([0,11],[0,11], 'k-')
     
+    
     fig.savefig(args.impath+'completeness_scatter'+ending)
     
+ 
+    #do contamination tests here --in progress
+    measdbl = np.array([m.getNPeaks()>1 for m in mergers])
+    realdbl = np.array([m.isdbl for m in mergers])
+    fakedbl = measdbl & (~realdbl)
+    interloperdbl = realdbl & (fluxratio <= desired_fr) & ((sepkpc < sep_kpc_min) | (sepkpc >= sep_kpc_max))
+    print "number of mergers", len(mergers)
+    print 'number measured pairs', sum(measdbl)
+    print 'number real pairs', sum(realdbl)
+    print 'number false pairs', sum(fakedbl)
     
-    #contamination plots
-    fig = figure.Figure((16,16))
-    canv = FigCanvas(fig)
-    subs = makesubplots(fig, 4, 4)
+    print "number of mergers (restricted)", sum(restrict)
+    print 'number measured pairs', sum(measdbl&restrict)
+    print 'number real pairs', sum(realdbl&restrict)
+    print 'number false pairs', sum(fakedbl&restrict)
+    print "number of real pairs with wrong separation or flux ratio", sum(interloperdbl)
     
-    origisdbl = isdbl
-    for m in mergers:
-        m.cleanPeaks(centcut=10.0, totfluxcut=tfc)#, fluxRcut=0.2)
-        m.assignRealPeaks()
-    isdbl = np.array([m.isdbl for m in mergers])
-    fakedbl = np.array([(len(m.peaklist)>1)&(not m.isdbl) for m in mergers])
-    alldbl = fakedbl | isdbl
-    restrict = zestcut & masscut & (redshift < 1.0)
-
-    ax = subs.next()
-    plotcomplete(ax, redshift[restrict], redshift[restrict], 
-                 alldbl[restrict], isdbl[restrict], 
-                fakedbl[restrict], nbins=10, split=False,
-                name='redshift')
-    plotcomplete(ax, redshift[restrict], redshift[restrict], alldbl[restrict],
-                 isdbl[restrict], isdbl[restrict], nbins=10, split=False,
-                name='redshift', bw=True)
-
-    ax = subs.next()
-    plotcomplete(ax, mag[restrict], mag[restrict], 
-                 alldbl[restrict], isdbl[restrict], 
-                fakedbl[restrict], nbins=10, split=False,
-                name='magnitude')
-    plotcomplete(ax, mag[restrict], mag[restrict], alldbl[restrict],
-                 isdbl[restrict], isdbl[restrict], nbins=10, split=False,
-                name='magnitude', bw=True)
-                
-    ax = subs.next()
-    plotcomplete(ax, mass[restrict], mass[restrict], 
-                 alldbl[restrict], isdbl[restrict], 
-                fakedbl[restrict], nbins=10, split=False,
-                name='log mass')
-    plotcomplete(ax, mass[restrict], mass[restrict], alldbl[restrict],
-                 isdbl[restrict], isdbl[restrict], nbins=10, split=False,
-                name='log mass', bw=True)
-
-    ax = subs.next()
-    allseps, isdblSep, fakedblSep = map(list,
-        zip(*[[ss, m.isdbl, (not m.isdbl)&(len(m.peaklist)>1)] 
-        for m in mergers[restrict] for ss in m.getSepsMaxPeak()]))
-    alldblSep = np.asarray(fakedblSep) | np.asarray(isdblSep)
-    allseps = np.asarray(allseps)
-    plotcomplete(ax, allseps, allseps, alldblSep, np.asarray(isdblSep), 
-                 np.asarray(fakedblSep), nbins=np.linspace(0,12,15),
-                 split=False)
-    plotcomplete(ax, allseps, allseps, alldblSep, np.asarray(isdblSep), 
-                 np.asarray(isdblSep), nbins=np.linspace(0,12,15),
-                 split=False, bw=True, name='separation [kpc]')
-    
-    ax = subs.next()
-    ax.hist(np.array([np.asarray(m.flux12())/m.flux
-                 for m in mergers[restrict]]).ravel(),
-            bins=np.logspace(-4,1,30), histtype='step', label='real peaks')
-    ax.hist(np.array([np.asarray(m.flux12())/m.flux
-                 for m in mergers[restrict&isdbl]]).ravel(),
-            bins=np.logspace(-4,1,30), histtype='step', label='peaks in pairs')
-    ax.hist([p.flux/m.flux for m in mergers[restrict] for p in m.extrapeaks],
-            bins=np.logspace(-4,1,30), histtype='step', label='all peaks')
-    ax.set_xlabel('peak flux/total flux')
-    ax.legend(loc=2, prop={'size':8})
-    ax.set_xscale('log')
-    
-    zall, magall, frall = map(np.asarray, zip(*[[m.z, m.mag, 
-                                           p.flux/m.flux] 
-                    for m in mergers[restrict] for p in m.extrapeaks]))
-    zmerge = [zz for m in mergers[restrict] for zz in [m.z]*2]
-    magmerge = [mm for m in mergers[restrict] for mm in [m.mag]*2]
-    fmerge = np.array([np.array(m.flux12())/m.flux 
-                        for m in mergers[restrict]]).ravel()
-    zmerge = np.asarray(zmerge)[fmerge>0]
-    magmerge = np.asarray(magmerge)[fmerge>0]
-    fmerge = fmerge[fmerge>0]
-
-    zalldbl, magalldbl, fralldbl = map(np.asarray, zip(*[[m.z, m.mag, 
-                                           p.flux/m.flux] 
-                    for m in mergers[restrict&(alldbl)] for p in m.extrapeaks]))
-    zmergedbl = [zz for m in mergers[restrict] for zz in [m.z]*2]
-    magmergedbl = [mm for m in mergers[restrict] for mm in [m.mag]*2]
-    fmergedbl = np.array([np.array(m.flux12())/m.flux 
-                        for m in mergers[restrict&(alldbl)]]).ravel()
-    zmergedbl = np.asarray(zmerge)[fmerge>0]
-    magmergedbl = np.asarray(magmerge)[fmerge>0]
-    fmergedbl = fmerge[fmerge>0]
-    
-    ax = subs.next()
-    ax.plot(zall, frall, 'k.')
-    ax.plot(zmerge, fmerge, 'c,')
-#    for mcurr in [18, 19.5, 21, 22.5]:
-#        ax.plot(np.arange(0.2,1.,0.1), 0.04 - 0.02*(mcurr-20.5) + 
-#            0.04*(np.arange(0.2,1,0.1)-0.5), 'm-')
-    ax.set_ylabel('peak flux/total flux')
-    ax.set_yscale('log')
-    ax.set_ylim((1.e-3,1.))
-    #print '80 percentiles with redshift of non-detections ',
-    zbs = np.linspace(0.2,0.9,7)
-    for izbs  in range(len(zbs)-1):
-        bad80 = np.percentile(np.asarray(frall)[(zall>zbs[izbs]) & 
-        (zall<=zbs[izbs+1])], 75)
-#        print '%.1f -- %.2e, %.2f'%(zbs[izbs], bad80,
-#                                    percentileofscore(fmerge[(zmerge>zbs[izbs])&(
-#                                    zmerge<=zbs[izbs+1])], bad80)),
-        ax.plot(np.mean(zbs[izbs:izbs+2]), bad80, 'ro')
-        good25= np.percentile(np.asarray(fmerge)[(zmerge>zbs[izbs]) & 
-        (zmerge<=zbs[izbs+1])], 25)
-        #print '%.2f -- %.2e, %.2f'%(zbs[izbs], good25,
-#                                    percentileofscore(np.asarray(frall)[(zall>zbs[izbs])&(
-#                                    zall<=zbs[izbs+1])], good25)),
-        ax.plot(np.mean([zbs[izbs:izbs+2]]), good25, 'y^')
-    print ''
-    
-    ax = subs.next()
-    cutoff=[]
-    for izbs in range(len(zbs)-1):
-        inz_a = (zall > zbs[izbs])&(zall <= zbs[izbs+1])
-        inz_m = (zmerge > zbs[izbs])&(zmerge <= zbs[izbs+1])
-        bins = np.logspace(-3,1,40)
-        bad = np.cumsum(np.histogram(frall[inz_a], bins=bins)[0][::-1])
-        allp = bad+np.cumsum(np.histogram(fmerge[inz_m], bins=bins)[0][::-1])
-        ax.semilogx(bins[:-1][::-1], bad*1.0/allp)
-        xval = bins[:-1][::-1]
-        keep = (xval > 0.002) & (xval < 0.3)
-        cutoff.append(np.interp(0.25, (1.0*bad/allp)[keep], xval[keep]))
-        bad2 = np.cumsum(np.histogram(frall, bins=bins)[0][::-1])
-        allp2 = 0.001+bad2 + np.cumsum(np.histogram(fmerge, bins=bins)[0][::-1])
-        ax.semilogx(xval, bad2*1.0/allp2, 'k-')
-        #print np.interp(0.25, (1.0*bad2/allp2)[keep], xval[keep])
-    #print zbs, cutoff
-    totcutpoly = np.polyfit((zbs[:-1]-0.5), cutoff, 1)
-    #print totcutpoly
-    ax.set_xlim((0.002,0.3))
-    ax.tick_params(labelsize=9)
-    ax.set_xlabel('peak flux ratio to galaxy')
-    ax.set_ylabel('cum. frac. (p/t > x) of non-real peaks')
-    print np.mean(cutoff), np.median(cutoff)
-    print 'total fraction of non-real peaks with cutoff at %.3f'%tfc,
-    print '%.3e'%(len(frall[frall>tfc])*1.0/(len(frall[frall>tfc])+len(fmerge[fmerge>tfc])))
-    print 'total fraction of non-real peaks (in pairs) with cutoff at %.3f'%tfc,
-    print '%.3e'%(len(fralldbl[fralldbl>tfc])*1.0/(len(fralldbl[fralldbl>tfc])+len(fmergedbl[fmergedbl>tfc])))
-    print 'fraction of real peaks above cutoff=%.3f'%tfc,
-    print '%.3e'%(len(fmerge[fmerge>tfc])/(2.0*len(mergers[restrict])))
-
-    ax = subs.next()
-    ax.plot(magall, frall, 'k.')
-    ax.plot(magmerge, fmerge, 'c,')
-#    for zcurr in [0.2,0.45,0.75,1.0]:
-#        ax.plot(np.arange(17,23,0.2), 0.04 - 0.02*(np.arange(17,23,0.2)-20.5) + 
-#            0.04*(zcurr-0.5), 'm-')
-    ax.set_ylabel('peak flux/total flux')
-    ax.set_yscale('log')
-    ax.set_ylim((1.0e-3,1.0))
-    #print '80 percentiles with magnitude of non-detections ',
-    zbs = np.linspace(18.5,20,5)
-    for izbs  in range(len(zbs)-1):
-        bad80 = np.percentile(np.asarray(frall)[(magall>zbs[izbs]) & 
-        (magall<=zbs[izbs+1])], 75)
-        #print '%.2f -- %.2e, %.2f'%(zbs[izbs], bad80,
-#                                    percentileofscore(fmerge[(magmerge>zbs[izbs])&
-#                                    (magmerge<=zbs[izbs+1])], bad80)),
-        ax.plot(np.mean(zbs[izbs:izbs+2]), bad80, 'ro')
-        good25= np.percentile(np.asarray(fmerge)[(magmerge>zbs[izbs]) & 
-        (magmerge<=zbs[izbs+1])], 25)
-        #print '%.2f -- %.2e, %.2f'%(zbs[izbs], good25,
-#                                    percentileofscore(np.asarray(frall)[(magall>zbs[izbs])&(
-#                                    magall<=zbs[izbs+1])], good25)),
-        ax.plot(np.mean(zbs[izbs:izbs+2]), bad80, 'ro')
-        ax.plot(np.mean(zbs[izbs:izbs+2]), good25, 'y^')
-    #print ''
-    np.savetxt('foo_all.txt', np.asarray([zall, magall, frall]).T, fmt='%.2f %.2f %.3e')
-    np.savetxt('foo_mergeisdbl.txt', np.asarray([zmerge, magmerge, fmerge]).T,
-               fmt='%.2f %.2f %.3e')
-    
-    ax = subs.next()
-    allfr, isdblfr, fakedblfr = map(list,
-        zip(*[[ss, m.isdbl, (not m.isdbl)&(len(m.peaklist)>1)] 
-        for m in mergers[restrict] for ss in m.getFluxRatioMaxPeak()]))
-    alldblfr = np.asarray(fakedblfr) | np.asarray(isdblfr)
-    allfr = np.asarray(allfr)
-    plotcomplete(ax, allfr, allfr, alldblfr, np.asarray(isdblfr), 
-                 np.asarray(fakedblfr), nbins=15,
-                 split=False)
-    plotcomplete(ax, allfr, allfr, alldblfr, np.asarray(isdblfr), 
-                 np.asarray(isdblfr), nbins=15,
-                 split=False, bw=True, name='flux ratio to max peak')
-    
-#    ax = subs.next()
-#    magall, zall, frmaxall = map(list, zip(*[[m.mag, m.z, ss]
-#        for m in mergers[restrict] for ss in m.getFluxRatioMaxPeak()]))
-#    ax.plot(magall, frmaxall, 'k.')
-#    ax.plot([m.mag for m in mergers[restrict]],
-#            [m.measFlux12() for m in mergers[restrict]], 'c.')
-#    ax.set_ylim((1.e-4,1.1))
-#    ax.set_yscale('log')
-#    ax.set_ylabel('peak flux ratios', size=9)
-    
-    ax = subs.next()
-    ax.hist([m.measFlux12() for m in mergers[restrict]],
-            bins=np.logspace(-4,0.1,30), histtype='step', label='real peaks')
-    ax.hist([ff for m in mergers[restrict]
-            for ff in m.getFluxRatioMaxPeak(extraonly=True)],
-            bins=np.logspace(-4,0.1,30), histtype='step', label='all peaks')
-    ax.set_xlabel('peak flux/max peak flux')
-    ax.legend(loc=2, prop={'size':8})
-    ax.set_xscale('log')
-    
-    for m in mergers:
-        m.cleanPeaks(centcut=10.0, totfluxcut= tfc, fluxRcut=cut_fr)
-        m.assignRealPeaks()
-    isdbl = np.array([m.isdbl for m in mergers])
-    fakedbl = np.array([(len(m.peaklist)>1)&(not m.isdbl) for m in mergers])
-    alldbl = fakedbl | isdbl
-    minordbl = np.array([(m.fluxratio < desired_fr) for m in mergers])
-    restrict = zestcut & masscut
-    seps = np.array([m.measSep12() if isdbl[restrict&alldbl][im] 
-            else m.getSepsMaxPeak()[0] for im,m in enumerate(mergers[restrict&alldbl])])
-    frs = np.array([m.measFlux12() if isdbl[restrict&alldbl][im] else m.getFluxRatioMaxPeak()[0]
-                    for im, m in enumerate(mergers[restrict&alldbl])])
-    print 'contaim from fake sources with MP cut',
-    print len(mergers[restrict&fakedbl])*1.0/len(mergers[restrict&alldbl])
-    print 'completeness of real, major mergers with MP cut',
-    print len(mergers[restrict&isdbl&(~minordbl)])*1.0/len(mergers[restrict&(~minordbl)])
-    print 'contaim from minor mergers with MP cut',
-    print len(mergers[restrict&isdbl&minordbl])*1.0/len(mergers[restrict&alldbl])
-    print 'completeness for all mergers with MP cut',
-    print len(mergers[restrict&isdbl])*1.0/len(mergers[restrict])          
-    
-    
-    ax = subs.next()
-    intlpr = np.array([m.isdbl & ((m.fluxratio < desired_fr)) 
-                for m in mergers])
-    plotcomplete(ax, redshift[restrict&alldbl], redshift[restrict&alldbl],
-                 alldbl[restrict&alldbl], isdbl[restrict&alldbl], intlpr[restrict&alldbl],
-                split=False, nbins=10, name='redshift')
-    
-    ax = subs.next()
-    plotcomplete(ax, seps,
-                np.array([m.sepkpc for m in mergers])[restrict&alldbl],
-                alldbl[restrict&alldbl], isdbl[restrict&alldbl], intlpr[restrict&alldbl],
-                split=True, nbins=np.linspace(2.0,10.,10), name='separation [kpc]')
-    
-    
-    ax = subs.next()
-    plotcomplete(ax, frs,
-                np.array([m.fluxratio for m in mergers])[restrict&alldbl],
-                alldbl[restrict&alldbl], isdbl[restrict&alldbl], intlpr[restrict&alldbl],
-                split=True, nbins=10, name='flux ratio')
-    #ax.set_xscale('log') 
-    
-#    ax = subs.next()
-#    ax.hist(measfluxratio[restrict&(fluxratio>desired_fr)],
-#             bins=np.linspace(0,1,25), histtype='step', color='c',
-#            label='pairs w/ 2/1 > %.2f'%desired_fr)
-#    print 'percentiles measured flux ratios with real ones larger than %.2f'%desired_fr,
-#    print np.percentile(measfluxratio[restrict&(fluxratio>desired_fr)&isdbl&(origisdbl)], (10,25,50,75,90))
-#    print 'percentiles measured flux ratios with real ones less than %.2f'%desired_fr,
-#    print np.percentile(measfluxratio[restrict&(fluxratio<=desired_fr)&isdbl&(origisdbl)], (10,25,50,75,90))
-#    ax.hist(measfluxratio[restrict&(fluxratio<desired_fr)],
-#             bins=np.linspace(0,1,25), histtype='step', color='b',
-#            label='pairs w/ 2/1 < %.2f'%desired_fr)
-#    ax.legend(loc=2, prop={'size':8})
-#    ax.set_xlabel('flux ratio')
-    
-    rlow = measfluxratio[restrict&(fluxratio<=desired_fr)&origisdbl]
-    rReallow = measfluxratio[restrict&(fluxratio<=0.2)&origisdbl]
-    rhigh = measfluxratio[restrict&(fluxratio>desired_fr)&origisdbl]
-    frbins = np.linspace(0,1,40)
-    fraclow = np.cumsum(np.histogram(rlow, bins=frbins)[0][::-1]) * 1.0 / \
-    np.cumsum(np.histogram(np.r_[rhigh, rlow], bins=frbins)[0][::-1])
-    xval = frbins[::-1][1:]
-    keep = (xval < 0.5)
-    low30 = np.interp(0.3, fraclow[keep], xval[keep])
-    ax = subs.next()
-    ax.plot(frbins[::-1][1:], fraclow)
-    ax.plot(frbins[::-1][1:], [percentileofscore(rhigh, bbb)*1e-2 for bbb in frbins[::-1][1:]])
-    print low30, percentileofscore(rhigh, low30)
-    #print zip(xval[keep], fraclow[keep])
-    frcut=0.25
-    print frcut, percentileofscore(rhigh, frcut), np.interp(frcut, xval[keep][::-1],
-                                                fraclow[keep][::-1]),
-    print len(measfluxratio[(measfluxratio>frcut)&restrict&(fluxratio<=frcut)&origisdbl])* \
-        1.0/(len(measfluxratio[(measfluxratio>frcut)&restrict&(fluxratio>frcut)&origisdbl]))
-    ax.set_ylim((0,0.4))
-    
-    if False:
-        #plot the completeness and contamination for different cuts
-        ax1 = subs.next()
-        ax2 = subs.next()
-        
-        for cc in [0.0, 0.1, 0.2, 0.25, 0.35, 0.4, 0.5]:
-            for m in mergers:
-                m.cleanPeaks(centcut=10.0, distcut=(2.2,8.0), totfluxcut= tfc, fluxRcut=cc)
-                m.assignRealPeaks()
-            isdbl = np.array([m.isdbl for m in mergers])
-            measfluxratio = np.array([m.measFlux12() for m in mergers])
-            ax1.plot(*(cumComplete(fluxratio[restrict], isdbl[restrict], bins=12, cum=True)), label='%.2f'%cc)
-            ax2.plot(*(cumContaim(fluxratio[isdbl], measfluxratio[isdbl], bins=12, cum=True)))
-            print np.median(measfluxratio[restrict&isdbl]), np.median(fluxratio[restrict&isdbl])
-        ax1.legend(loc=2, prop={'size':6}, ncol=2, borderpad=0.0, columnspacing=0.5)
-        ax1.set_ylabel('completeness', size=9)
-        ax2.set_ylabel('contaim frac', size=9)
-        ax1.set_xlabel('real flux ratio')
-        ax2.set_xlabel('meas flux ratio')
-        ax1.tick_params(labelsize=6)
-        ax2.tick_params(labelsize=6)
-    
-#    print low30, percentileofscore(rhigh, low30)
-#    print zip(xval[keep], fraclow[keep])
-#    print 0.2, percentileofscore(rhigh, 0.2), np.interp(0.2, xval[keep][::-1], 
-#                                                fraclow[keep][::-1])
-#    per = 25
-#    medfr = np.percentile(fluxratio[restrict&(isdbl)],per)
-#    print '(1) %d percentile real fr in observed sample'%per, medfr,
-#    print 'median ',np.median(fluxratio[restrict&isdbl])
-#    intl2 = np.array([m.isdbl & (fluxratio < medfr) for m in mergers])
-#    rlow2 = measfluxratio[restrict&(fluxratio<=medfr)&isdbl]
-#    rhigh2 = measfluxratio[restrict&(fluxratio>medfr)&isdbl]
-#    print 'contamination of mergers above median', len(rlow2)*1.0/(len(rlow2)+len(rhigh2))
-#    print 'completeness above median', len(measfluxratio[restrict&(fluxratio>medfr)&isdbl])*1.0 / \
-#    len(measfluxratio[restrict&(fluxratio>medfr)&origisdbl])
-    fig.savefig(args.impath+'contaim_2lt_off'+ending)
-
-
-
     return 0
 
 
