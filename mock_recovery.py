@@ -94,7 +94,7 @@ class Merger:
         for key, val in kwargs.iteritems():
             setattr(self, key, val)
         self.peaklist = list()
-        self.mag = -2.5*np.log10(self.flux)+25.959
+        self.mag = -2.5*np.log10(self.flux)+config.zeropt
         
     def setReal(self):
         self.isdbl = True
