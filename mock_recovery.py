@@ -105,6 +105,9 @@ class Merger:
     def toArcsec(self, kpc):
         return kpc / (self.angdist_kpc) * 206265.
         
+    def getNPeaks(self):
+        return len(self.peaklist)
+        
     def addPeak(self, **kwargs):
         self.peaklist.append(Peak(**kwargs))
         self.peaklist[-1].isGal1 = False
