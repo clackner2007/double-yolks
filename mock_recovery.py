@@ -16,7 +16,7 @@ import numpy as np
 from collections import defaultdict
 import matplotlib.figure as figure
 
-import astropy.io.fits as pyfits
+import astropy.io.fits
 import astropy.table
 from astropy.cosmology import FlatLambdaCDM
 
@@ -215,7 +215,7 @@ class Merger:
         
         imgfile = path + '%06d_%06d_%04.1f.fits'%(self.id1, 
                                                   self.id2, self.sepkpc)
-        data = pyfits.open(imgfile)[0].data
+        data = astropy.io.fits.open(imgfile)[0].data
         xoff=70
         yoff=70
         data = data[xoff:268-xoff,yoff:268-yoff]

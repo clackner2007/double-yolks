@@ -15,7 +15,6 @@ program details
 import sys, os, re, copy
 import argparse
 import numpy as np
-import pyfits
 import sigma_clip
 import astropy.io
 

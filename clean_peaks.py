@@ -23,8 +23,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigCanvasA
 from matplotlib.patches import Ellipse
 
 from astropy.cosmology import FlatLambdaCDM 
-import astropy.wcs
-import pyfits
+import astropy.wcs, astropy.io.fits
 from ConfigParser import SafeConfigParser
 
 import configParams as config
@@ -173,7 +172,7 @@ class Galaxy():
         canv=FigCanvas(fig)
 
         ax1=fig.add_subplot(121, frameon=False)
-        img = pyfits.open(self.imgfile)[0].data
+        img = astropy.io.fits.open(self.imgfile)[0].data
         vmax = 14*np.std(img.flatten())
         ax1.imshow(np.arcsinh(img), origin='lower', cmap='gray',
                    vmax=np.arcsinh(vmax), aspect='equal',

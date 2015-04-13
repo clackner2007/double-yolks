@@ -7,11 +7,10 @@ Created on Tue Oct 23 19:20:52 2012
 
 import argparse
 import sys,os,re
-import pyfits
 import numpy as np
 import copy
 import scipy.ndimage
-from astropy import table
+from astropy import table, io
 import flood_fill as ff
 import fluxSinc
 from multiprocessing import Pool
@@ -75,7 +74,7 @@ class Peak:
         return self.size
 
     def getFlux(self,img=None):
-        if img==None:
+        if img is None:
             return np.sum(self.vals)
         else:
             return np.sum(img[ff.make_pix_array(self.area)])
@@ -145,7 +144,7 @@ def mapMeasPeak(galobj, r_in_fwhm=1.28, ring_width=0.7, fwhm_all=None):
     else:
         fwhm = fwhm_all
 
-    img=pyfits.open(f)[0].data
+    img=io.fits.open(f)[0].data
     r_in = r_in_fwhm *fwhm
     r_out = r_in + ring_width
     nx=np.round((r_out + 1.5)*2)
