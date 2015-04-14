@@ -191,18 +191,18 @@ class Galaxy():
                         s=[p.flux/nucs[imax].flux*25 for p in nucs])
 
             ax2.add_artist(Ellipse((nucs[imax].y0, nucs[imax].x0),
-                                   10.0/self.kpc_p_pix, 10./self.kpc_p_pix,
+                                   20.0/self.kpc_p_pix, 20./self.kpc_p_pix,
                                    0.0, ec='m', fc='None', lw=1))
 
         #scale bar
-        ax1.plot([5,5+5.0/self.kpc_p_pix], [5,5], 'b-', lw=2)
-        ax1.text(5+5.0/self.kpc_p_pix*0.2, 10, '5 kpc', color='b')
+        ax1.plot([5,5+5.0/self.kpc_p_pix], [5,5], 'c-', lw=2)
+        ax1.text(5+5.0/self.kpc_p_pix*0.2, 10, '5 kpc', color='c')
         for a in fig.get_axes():
             a.tick_params(bottom='off', top='off', left='off', right='off',
                           labelbottom='off', labelleft='off')
         fig.subplots_adjust(top=0.98,left=0.0,right=0.98,bottom=0.00,
                             hspace=0.01, wspace=-0.1)
-        fig.savefig(outdir+'peaks_{0}'.format(self.ident)+ending)
+        fig.savefig(os.path.join(outdir,'peaks_{0}'.format(self.ident)+ending))
 
 
 ###############################################################
@@ -270,6 +270,10 @@ def main():
     cParser = SafeConfigParser()
     cParser.read(args.param_file)
    
+    try:
+        os.makedirs(args.path)
+    except OSError:
+        pass
 
     gals=[]
 
@@ -324,11 +328,11 @@ def main():
 
     in_pairs = np.where(n_nucs >= 2)[0]
 
-    f = open(args.path+'cleaned_peaks_sources.txt', 'w')
-    f1 = open(args.path+'all_peaks_sources.txt', 'w')
-    fpeaks = open(args.path+'cleaned_peaks.txt', 'w')
+    f = open(os.path.join(args.path,'cleaned_peaks_sources.txt'), 'w')
+    f1 = open(os.path.join(args.path,'all_peaks_sources.txt'), 'w')
+    fpeaks = open(os.path.join(args.path, 'cleaned_peaks.txt'), 'w')
 
-    fpairs = open(args.path+"clean_pairs.txt", 'w')    
+    fpairs = open(os.path.join(args.path,"clean_pairs.txt"), 'w')    
     
     print >>f1, "ID Z RA DEC PearonRho N_PEAK DIST_FROM_BRIGHTEST(xN_PEAK) FLUX(xN_PEAK)"
     print >>f, "ID Z RA DEC PearonRho N_PEAK DIST_FROM_BRIGHTEST(xN_PEAK) FLUX(xN_PEAK)"
@@ -407,9 +411,10 @@ def main():
         ending='.eps' if args.epsPlot else '.png'
         my_list = np.arange(len(gals))[(n_nucs >=2)]
         #rand = np.random.permutation(my_list)[:100]
-        if not os.path.exists(args.path+'/imgs'):
-            os.makedirs(args.path+'/imgs')
-        s = makehtml(gals, my_list, FigCanvas, ending, args.path)
+        if not os.path.exists(os.path.join(args.path,'imgs')):
+            os.makedirs(os.path.join(args.path,'imgs'))
+        s = makehtml(gals, my_list, FigCanvas, ending, 
+                     os.path.join(args.path, 'imgs'))
         htmlFile = open(args.path+'/imgs/imgs.html', 'w')
         htmlFile.write(s)
         htmlFile.close()
