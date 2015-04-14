@@ -63,3 +63,17 @@ This file contains configuration parameters relating to cleaning up the peak lis
 7. `imsize_x` 1st dimension of image in arcseconds (could be removed...I think)
 8. `imsize_y` 2nd dimension of image in arcseconds
 9. `pearsonr_cut` this removes sources with 3+ peaks in which the peaks are spatially-aligned as we don't expect that to be the case in reality, but it does occur for barred spirals or edge-on disks.
+
+
+###Testing with Mock Mergers
+The second part of this code makes mock merger galaxies by coadding two real galaxy postage stamps with an offset. There are also tools to examine the completeness and contamination.
+
+####make_merger_stamps.py
+
+#####make_mocks.ini
+
+####test_mock_recovery.py
+
+#####mock_recovery.py
+
+
