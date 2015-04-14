@@ -6,6 +6,8 @@ Code to find double yolk galaxies and make mock images to run through the filter
 ####peak_filter.py
 The first part of the code actually implements the ring filter which first smooths the image, then subtracts the smooth image (making a high-pass filter) and finally runs a detection algorithm to detect the separate peaks. Here's what that looks like for a well-chosen sample image. 
 
+![alt text](https://raw.githubusercontent.com/clackner2007/double-yolks/master/ringfilt_img_readme.png "Example of Peak Filter")
+
 The options for peak_filter.py are all command-line options as follows:
 ```
 input list	this is the list of images you want to run. An example is in test_data/input_test. 
