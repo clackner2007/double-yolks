@@ -211,6 +211,11 @@ def main():
 
     args=parser.parse_args()
 
+    try:
+        os.makedirs(args.path)
+    except OSError:
+        pass
+
     #get the data
     data = table.Table().read(args.infile, 
                         format='fits' if os.path.splitext(args.infile)[1]=='.fits' else 'ascii')
@@ -260,8 +265,8 @@ def main():
                         ('z', float), ('mag', float), ('delz', float), ('fwhm', float), ('inkpc', bool)]))
 
         
-    gal_file = open(args.path+"gal_list", 'w')
-    peak_file = open(args.path+'peak_list', 'w')
+    gal_file = open(os.path.join(args.path,"gal_list"), 'w')
+    peak_file = open(os.path.join(args.path,'peak_list'), 'w')
     
     #header for output
     gal_file.write("ID Z DELTA_Z MAG NPEAKS\n")
