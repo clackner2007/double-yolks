@@ -269,9 +269,7 @@ def main():
     
     cParser = SafeConfigParser()
     cParser.read(args.param_file)
-    gal_kwargs = dict([(name, cParser.getfloat('galaxy_init', name)) 
-                        for name in cParser.options('galaxy_init')])
-
+   
 
     gals=[]
 
@@ -304,7 +302,7 @@ def main():
                            gg['ang_dist_orig'],
                            ra=gg['RA'] if 'RA' in gg.colnames else None,
                             dec=gg['DEC'] if 'DEC' in gg.colnames else None, 
-                            delz=gg['DELTA_Z'], imgfile=gg['FILENAME'], **gal_kwargs))
+                            delz=gg['DELTA_Z'], imgfile=gg['FILENAME']))
         if k in peak_dict:
             for p in peak_dict[k]:
                 gals[-1].add_nuclei(Nuclei(p['PEAK_X0_PIX'], p['PEAK_Y0_PIX'], p['PEAK_NPIX'],

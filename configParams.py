@@ -20,6 +20,8 @@ Om0=0.3
 #image properties
 zeropt=25.959
 pixelscale=0.03
+#(note: when using redshifted images, use the original 
+#pixel scale here as the code does adjustments internally)
 
 #cutout sizes in pixels
 cutoutX = 268
