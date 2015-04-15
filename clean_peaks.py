@@ -226,10 +226,13 @@ def makehtml(gals, mylist, FigCanvas, ending, outpath):
             s2 += "<tr><td>%s:</td><td>%.6f</td></tr>\n" % ('RA',gals[i].ra)
         if gals[i].dec:
             s2 += "<tr><td>%s:</td><td>%.6f</td></tr>\n" % ('DEC',gals[i].dec)
-        s2 += "<tr><td>%s:</td><td>%.3e</td></tr>\n" % ('P1/P2', 
-                                                        peaks[1].allflux/peaks[0].allflux)
-        s2 += "<tr><td>%s:</td><td>%.3e</td></tr>\n" % ('P2/tot', 
-                                                        peaks[1].allflux/gals[i].flux)
+        if len(peaks) >= 2:
+            s2 += "<tr><td>%s:</td><td>%.3e</td></tr>\n" % ('P1/P2', 
+                                                            peaks[1].allflux/peaks[0].allflux)
+            s2 += "<tr><td>%s:</td><td>%.3e</td></tr>\n" % ('P2/tot', 
+                                                            peaks[1].allflux/gals[i].flux)
+        else:
+            s2 += "<tr></tr>\n<tr></tr>\n"
         s2 += "<tr><td>%s:</td><td>%d</td></tr>\n" % \
             ('NPEAK',gals[i].num_nuclei())
         s2 += "</table>\n"
@@ -409,7 +412,7 @@ def main():
     if args.makePlots:
         FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
         ending='.eps' if args.epsPlot else '.png'
-        my_list = np.arange(len(gals))[(n_nucs >=2)]
+        my_list = np.arange(len(gals))#[(n_nucs >=2)]
         #rand = np.random.permutation(my_list)[:100]
         if not os.path.exists(os.path.join(args.path,'imgs')):
             os.makedirs(os.path.join(args.path,'imgs'))
