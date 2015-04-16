@@ -89,8 +89,8 @@ class Galaxy():
             return self.goodMask
 
             
-        center = (8.0/0.03*0.5*self.ad_orig/self.ad,#ang_dist(self.z-self.delz)/self.ad,
-                  8.0/0.03*0.5*self.ad_orig/self.ad)#ang_dist(self.z-self.delz)/self.ad)
+        center = (center[0]*self.ad_orig/self.ad,#ang_dist(self.z-self.delz)/self.ad,
+                  center[1]*self.ad_orig/self.ad)#ang_dist(self.z-self.delz)/self.ad)
         #distcent = np.array([nn.getDist(center[0], center[1], scale=0.03)
         #                    for nn in self.nuclei])
         mask = np.array([(nn.ellip >= ecut) &
@@ -213,9 +213,12 @@ def makehtml(gals, mylist, FigCanvas, ending, outpath):
     s += "<table>\n"
     for i in mylist:
         gals[i].plot(FigCanvas,ending, outdir=outpath)
-        peaks = sorted(np.asarray(gals[i].nuclei)[gals[i].good_nuclei()], 
-                       key=lambda p: p.allflux,
-                       reverse=True)
+        if len(gals[i].nuclei) > 0:
+            peaks = sorted(np.asarray(gals[i].nuclei)[gals[i].good_nuclei()], 
+                           key=lambda p: p.allflux,
+                           reverse=True)
+        else:
+            peaks = []
                         
         s += "<tr>\n"
         s2 = "<table>\n"
@@ -349,12 +352,12 @@ def main():
         print >>fpairs, "X0_P0 Y0_P0 X0_P1 Y0_P1 FLUX_P0 FLUX_P1"
     
     for g in gals:
-        maxN = g.getMaxNuc(masked=False)
         print >>f1,"%6d %.3f %.6f %.6f %.3f %d"%(g.ident, g.z, g.ra if g.ra else np.NaN, 
                                                  g.dec if g.dec else np.NaN,
                                                  g.getPearsonR(masked=False),     
                                                 g.num_nuclei(mask=False)),
         for p in np.asarray(g.nuclei):
+            maxN = g.getMaxNuc(masked=False)
             print >>f1, "%.5e"%(p.getDist(g.nuclei[maxN].x0,
                                          g.nuclei[maxN].y0,
                                          scale=config.pixelscale)),
