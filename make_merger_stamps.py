@@ -113,11 +113,11 @@ def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3,
 
     to_pix = 1.0e-3/cosmos.angular_diameter_distance(gal_list['Z']).value * 206265. / config.pixelscale
     
-    outfile = open(outpath+'simulatedSample_%.2f.dat'%mag_limit, 'w')
+    outfile = open(os.path.join(outpath,'simulatedSample_%.2f.dat'%mag_limit), 'w')
     outfile.write('#ID gal1_id gal2_id mag1 mag2 flux_ratio z1 z2 ')
     outfile.write('zest1 zest2 sep_kpc x01 y01 x02 y02\n')
     
-    peakoutfile = open(outpath+'input_peakfilter_%.2f.dat'%mag_limit, 'w')
+    peakoutfile = open(os.path.join(outpath,'input_peakfilter_%.2f.dat'%mag_limit), 'w')
     peakoutfile.write('ID FILENAME Z MAG\n')
 
     count = 0
@@ -132,8 +132,8 @@ def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3,
                                 10.0**(-0.4*gal2['MAG']))
         
         try:
-            img1 = astropy.io.fits.open(impath + gal1['FILENAME'])[0].data
-            img2 = astropy.io.fits.open(impath + gal2['FILENAME'])[0].data
+            img1 = astropy.io.fits.open(os.path.join(impath, gal1['FILENAME']))[0].data
+            img2 = astropy.io.fits.open(os.path.join(impath, gal2['FILENAME']))[0].data
         except IOError:
             print 'either ', impath + gal1['FILENAME'],' or ',
             print impath + gal2['FILENAME'],'is missing'
@@ -148,8 +148,8 @@ def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3,
             compimg = img1[:maxX,:maxY] + img2_off[:maxX,:maxY]
             wcs = makeWCS(compimg)
             hdu = astropy.io.fits.PrimaryHDU(compimg, header=wcs.to_header())
-            hdu.writeto(outpath+"imgs/%06d_%06d_%04.1f.fits"%(gal1['ID'],
-                                                   gal2['ID'], off),
+            hdu.writeto(os.path.join(outpath,"imgs","%06d_%06d_%04.1f.fits"%(gal1['ID'],
+                                                   gal2['ID'], off)),
                         clobber=True)
     
             outfile.write('%6d %d %d %.2f %.2f %.2e %.2f %.2f %d %d %.1f %.1f %.1f %.1f %.1f\n' % (
@@ -190,7 +190,7 @@ if __name__=='__main__':
         config_mocks[category] = mylist                    
     
     if not os.path.exists(args.outputpath):
-        os.makedirs(args.outputpath)
+        os.makedirs(os.path.join(args.outputpath, 'imgs'))
 
     listStamps(args.inputlist, args.impath,
                outpath=args.outputpath, H0=config.H0, Om0=config.Om0, **config_mocks)
