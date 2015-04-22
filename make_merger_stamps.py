@@ -189,6 +189,9 @@ if __name__=='__main__':
         mylist = np.asarray([cParser.getfloat(category, n) for n in cParser.options(category)])
         config_mocks[category] = mylist                    
     
+    if not os.path.exists(args.outputpath):
+        os.makedirs(args.outputpath)
+
     listStamps(args.inputlist, args.impath,
                outpath=args.outputpath, H0=config.H0, Om0=config.Om0, **config_mocks)
     
