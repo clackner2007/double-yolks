@@ -143,7 +143,9 @@ def listStamps(infile, impath, outpath='.', H0=70, Om0=0.3,
         for off in offsets:  
             img2_off, delx, dely = moveImage(img2, off*to_pix[selected[pair]],
                                        np.random.random()*2.0*np.pi, img2noise)
-            compimg = img1 + img2_off
+            maxX = min(img1.shape[0], img2.shape[0])
+            maxY = min(img1.shape[1], img2.shape[1])
+            compimg = img1[:maxX,:maxY] + img2_off[:maxX,:maxY]
             wcs = makeWCS(compimg)
             hdu = astropy.io.fits.PrimaryHDU(compimg, header=wcs.to_header())
             hdu.writeto(outpath+"imgs/%06d_%06d_%04.1f.fits"%(gal1['ID'],
