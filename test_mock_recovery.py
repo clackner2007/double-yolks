@@ -29,7 +29,7 @@ def main():
               formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("infolder", help='folder with peak finding output')
     parser.add_argument('origfile', help='file with real merger info')
-    parser.add_argument('-o', '--outpath', dest='outpath', default='./',
+    parser.add_argument('-o', '--outpath', dest='impath', default='./',
                         help='path to image output')
     parser.add_argument("-e", "--eps",
                  action='store_true', default=False, help='make eps plots',
@@ -38,6 +38,11 @@ def main():
                         help='plot images of mocks with detected peaks\n(default=0)',
                         default=0)
     args = parser.parse_args()
+
+    try:
+        os.makedirs(args.impath)
+    except OSError:
+        continue
     
     FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
     ending='.eps' if args.epsPlot else '.png'
@@ -152,7 +157,7 @@ def main():
     ax.plot([0,11],[0,11], 'k-')
     
     
-    fig.savefig(args.impath+'completeness_scatter'+ending)
+    fig.savefig(os.path.join(args.impath,'completeness_scatter'+ending))
     
  
     #do contamination tests here --in progress

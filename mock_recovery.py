@@ -12,6 +12,7 @@ Created on Mon Apr 21 08:24:25 2014
 
 program details
 """
+import os
 import numpy as np
 from collections import defaultdict
 import matplotlib.figure as figure
@@ -26,7 +27,7 @@ def readMergers(inputfolder, origfile, clean=False):
     """
     read in a set of mock mergers, including where the merger was finally detected
     """
-    with open(inputfolder+'cleaned_peaks_sources.txt') as pSrc, open(inputfolder+'cleaned_peaks.txt') as pXY:
+    with open(os.path.join(inputfolder,'cleaned_peaks_sources.txt')) as pSrc, open(os.path.join(inputfolder+'cleaned_peaks.txt')) as pXY:
         linesSrc = pSrc.readlines()
         linesPxy = pXY.readlines()
         peaks = {}
@@ -213,8 +214,8 @@ class Merger:
     def plot(self, ax, path, peaks=True, vmax=None, title=False, realpeaks=False, 
              bar=False, bw=False, **kwargs):
         
-        imgfile = path + '%06d_%06d_%04.1f.fits'%(self.id1, 
-                                                  self.id2, self.sepkpc)
+        imgfile = os.path.join(path, '%06d_%06d_%04.1f.fits'%(self.id1, 
+                                                              self.id2, self.sepkpc))
         data = astropy.io.fits.open(imgfile)[0].data
         xoff=70
         yoff=70
@@ -309,7 +310,7 @@ def plotPeaks(mergers, path, impath, ending, FigCanvas, ngal=None):
                            cmap='gray', interpolation='none', aspect='equal')
     
         fig.tight_layout(pad=0.1)
-        fig.savefig(impath+'peaksall_%06d_%06d'%key+ending)
+        fig.savefig(os.path.join(impath,'peaksall_%06d_%06d'%key+ending))
 
 
 def cumComplete(value, selected, bins=10, cum=False):
