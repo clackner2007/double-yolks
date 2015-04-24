@@ -80,17 +80,20 @@ param_file: config parameter file (*.ini) for making mocks, make_mocks.ini is pr
 ```
 
 The outputs of `make_merger_stamps.py` are the coadded images (FITS format) in output/path/imgs. The files names are of the form `GALID1_GALID2_sepkpc.fits`, which gives the ids of the two galaxies in the image and their separation in kiloparsecs (assuming redshift of the middle galaxy, but the redshifts are similar). The code also outputs two text files into the directory specified by the `-o` option:
+
 1. `input_peakfilter_MAG.txt` This is the input file needed to run the peak-finder on the mock images. It contains the new id numbers (starting with 0), the image filenames, the redshift (of the 'middle' galaxy) and the magnitude obtained by summing the fluxes of the two input galaxies. `MAG` in the filename corresponds to the limiting magnitude used to generate the mocks and given in the configuration file.
 2. `simulatedSample_MAG.dat` This file gives more details about the mock merger images that can be compared to the output of the peak-finding code above. It includes the id numbers of the mock merger, the input galaxies, the magnitudes of the galaxies and the magnitude of the merger (the sum of the galaxy fluxes), the flux ratio of the galaxies, the redshifts of the galaxies, the morphology (zest) parameters of the galaxies, the separation of the galaxies in the mock image, and the position of the galaxies in pixels in the mock image. The first galaxy is always in the center of the image while the second is offset in a random direction. The morphology parameters can be given in the input list for the mock generation. If they aren't the code just puts a 1 here and doesn't use it for anything.
 
 #####make_mocks.ini
 This is an example of the configuration parameter file used by `make_merger_stamps.py`. The available parameters are:
+
 1. `list_stamps`
   1. `ngal` is the number of galaxy pairs to coadd. This times the number of offsets will give the number of mock merger images.
   2. `mag_limit` is the limiting magnitude to use for the input sample. It also shows up in the output table filenames. This maybe useful if you don't want to coadd galaxies which are extremely faint.
 2. `zlims` give the redshift limits applied to the input galaxies. Only galaxies between 0.2<z<1.1 will be used.
 3. `offsets` lists the offsets to be used in kpc. The number of parameters here is arbitrary, but the names should be of the form `oNUMBER`. The code uses the input galaxy redshifts to convert these to offsets in arcseconds for each galaxy pair. Mock images are made using each offset for each of the `ngal` pairs of galaxies.
-4. 
+4. `morph_class` lists the possible morphology classes. The code expects integer labels here. Originally, this morphology label referred to the ZEST morphology class of the galaxy, but the label could mean anything. In order to use this, the input galaxy list needs to have a column called ZEST with the integer label for each galaxy. By placing values in this list, the code will only find matching galaxies which have a ZEST parameter given in the list. For example if the `morph_class` values are `[1,2]`, the code will only find matches in which at least one galaxy is of ZEST type 1 or 2. If there is no ZEST column in the data, the code uses a default value of 1, so make sure that the configuration always includes at list the value 1 if you don't plan on using it.
+
 
 ####test_mock_recovery.py
 
