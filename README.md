@@ -26,9 +26,9 @@ The input data must include: a galaxy ID number (unique), a filename for the ima
 `peak_filter.py` creates two files, the first is a list of galaxies call gal_list. This looks almost like the input list, but includes a column `N_PEAKS` which is the number of peaks found for that image. The second file is peak_list which has one line for each measured peak including the parameters (size, position, flux, etc.). At this point, there are a lot of junk peaks which have to be removed.
 
 ####clean_peaks.py
-`peak_filter.py` is agnostic about what types of peaks it keeps and it lets through a lot of junk. `clean_peaks.py` filters out a lot of the junk. This piece of code has 2 configuration files. One, `configParams.py` is more global and used by the mock image tests as well. The other, `clean_config.ini` only applies to clean_peaks.py. These will have to be modified depending on your data.
+`peak_filter.py` is agnostic about what types of peaks it keeps and it lets through a lot of junk. `clean_peaks.py` filters out a lot of the junk. Because the cleaning is separate from the detecting, it can be run many times with different configuration parameters on the same set of input data from `peak_filter.py`. This code has 2 configuration files. One, `configParams.py` is more global and used by the mock image tests as well. The other, `clean_config.ini` only applies to clean_peaks.py. These will have to be modified depending on your data.
 
-To run: `clean_peaks.py input_list_file gal_list peak_list [options]`. The arguments/options are:
+To run: `clean_peaks.py input_list_file gal_list peak_list param_file [options]`. The arguments/options are:
 ```
 inputfile: input file table, as used in peak_filter.py
 gal_list: galaxy listing from peak_filter ( called gal_list)
@@ -36,12 +36,12 @@ peak_list: peak listing from peak_filter (called peak_list)
 param_file: config parameter file (*.ini) for cleaning peaks, clean_config.ini is provided
 -p: give path to output
 -x: output peak coordinates in pixels in clean_pairs.txt instead of ra/dec
--l: make images of peaks, and put them in output/path/imgs folder along with imgs.html file to easily open them
+-l: make images of peaks, and put them in output/path/imgs folder along with imgs.html file to easily open them (this step is SLOW)
 -i: path to input images, only needed for plotting
 -e: make eps plots instead of png (default)
 ```
 
-The out of `clean_peaks.py` are 4 text files
+The outputs of `clean_peaks.py` are 4 text files
 
 1. `all_peaks_sources.txt`: This contains all the sources and all their peaks before cleaning. Each line contains one source and the number of peaks as well as the separation of the peaks from the brightest sources and the fluxes of each peak. Note that the rows have different lengths.
 2. `cleaned_peaks_sources.txt`: This contains only the cleaned peaks, including sources with just one peak. The format is the same as for `all_peaks_sources.txt`
@@ -52,7 +52,7 @@ The out of `clean_peaks.py` are 4 text files
 This contains the cosmology parameters, as well as image parameters, like the magnitude zeropoint, the pixelscale (arcseconds/pixel) and the size of the cutout images in pixels. These are assumed to be global for a project.
 
 #####clean_config.ini
-This file contains configuration parameters relating to cleaning up the peak list. It's basically a list of cuts to be made on peaks. The values used here are arbitrary, but some of them can be set by looking at peak finding in mock galaxies and minimizing the contamination/maximizing the completeness. The parameters are as follows:
+This file is an example configuration file for `clean_peaks.py`. It's basically a list of cuts to be made on peaks. The values used here are arbitrary, but some of them can be set by looking at peak finding in mock galaxies and minimizing the contamination/maximizing the completeness. The parameters are as follows:
 
 1. `ecut` this sets the minimum ratio of the ellipticities (as computed from the second moments of the flux distribution). It selects *against* long skinny peaks, which are usually artificial.
 2. `dist_cut_1` inner separation limit in kpc. This sets the minimum allowed separation. If you want a sample that's similarly complete at all redshifts, set this to the kpc-scale of the resolution limit at the highest redshift.
@@ -66,11 +66,31 @@ This file contains configuration parameters relating to cleaning up the peak lis
 
 
 ###Testing with Mock Mergers
-The second part of this code makes mock merger galaxies by coadding two real galaxy postage stamps with an offset. There are also tools to examine the completeness and contamination.
+The second part of this code makes mock merger galaxies by coadding two real galaxy postage stamps with a spatial offset. This mimicks real merging systems, but it doesn't create any of the known structure that exists in mergers (tidal tails, starbursts, shells, rings etc.). Many of these features are low surface brightness, making them unimportant for the peak filter. Once the mock images are generated, they can be run through the peaking finding and cleaning to test the completeness of the peak finder. It's useful to play around with the cleaning parameters at this stage to see how they effect the completeness and contamination.
 
 ####make_merger_stamps.py
+This is the code that makes the mock merger images. It can use the same images you ran the `peak_filter.py` on, or use entirely different images. Each merger image consists of 2 randomly selected galaxies. The galaxies are required to have similar redshifts (within 0.03 by default) and their morphologies can be constrained. One galaxy image is then offset by a fixed amount in a random direction. The appropriate amount of noise is added to the blank pixels and then the two galaxy images are added together. This means the mock images are sqrt(2) times noisier than the input images.
+
+To run: `make_merger_stamps.py input_list_file param_file [options]`. The arguments/options are:
+```
+inputfile: input file table, same format as in peak_filter.py
+param_file: config parameter file (*.ini) for making mocks, make_mocks.ini is provided clean_config.ini is provided
+-o: output path for listing files and images
+-i: path to input images, these are the images that will be coadded
+```
+
+The outputs of `make_merger_stamps.py` are the coadded images (FITS format) in output/path/imgs. The files names are of the form `GALID1_GALID2_sepkpc.fits`, which gives the ids of the two galaxies in the image and their separation in kiloparsecs (assuming redshift of the middle galaxy, but the redshifts are similar). The code also outputs two text files into the directory specified by the `-o` option:
+1. `input_peakfilter_MAG.txt` This is the input file needed to run the peak-finder on the mock images. It contains the new id numbers (starting with 0), the image filenames, the redshift (of the 'middle' galaxy) and the magnitude obtained by summing the fluxes of the two input galaxies. `MAG` in the filename corresponds to the limiting magnitude used to generate the mocks and given in the configuration file.
+2. `simulatedSample_MAG.dat` This file gives more details about the mock merger images that can be compared to the output of the peak-finding code above. It includes the id numbers of the mock merger, the input galaxies, the magnitudes of the galaxies and the magnitude of the merger (the sum of the galaxy fluxes), the flux ratio of the galaxies, the redshifts of the galaxies, the morphology (zest) parameters of the galaxies, the separation of the galaxies in the mock image, and the position of the galaxies in pixels in the mock image. The first galaxy is always in the center of the image while the second is offset in a random direction. The morphology parameters can be given in the input list for the mock generation. If they aren't the code just puts a 1 here and doesn't use it for anything.
 
 #####make_mocks.ini
+This is an example of the configuration parameter file used by `make_merger_stamps.py`. The available parameters are:
+1. `list_stamps`
+  1. `ngal` is the number of galaxy pairs to coadd. This times the number of offsets will give the number of mock merger images.
+  2. `mag_limit` is the limiting magnitude to use for the input sample. It also shows up in the output table filenames. This maybe useful if you don't want to coadd galaxies which are extremely faint.
+2. `zlims` give the redshift limits applied to the input galaxies. Only galaxies between 0.2<z<1.1 will be used.
+3. `offsets` lists the offsets to be used in kpc. The number of parameters here is arbitrary, but the names should be of the form `oNUMBER`. The code uses the input galaxy redshifts to convert these to offsets in arcseconds for each galaxy pair. Mock images are made using each offset for each of the `ngal` pairs of galaxies.
+4. 
 
 ####test_mock_recovery.py
 
