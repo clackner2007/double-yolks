@@ -42,7 +42,7 @@ def main():
     try:
         os.makedirs(args.impath)
     except OSError:
-        continue
+        pass
     
     FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
     ending='.eps' if args.epsPlot else '.png'
@@ -67,7 +67,7 @@ def main():
     #the simulatedSample file, they'll be read in in the mergers
     redshift = np.array([m.z for m in mergers])
     sepkpc = np.array([m.sep_kpc for m in mergers])
-    fluxratio = np.array([m.fluxratio for m in mergers])
+    fluxratio = np.array([m.flux_ratio for m in mergers])
     zest1 = np.array([m.zest1 for m in mergers])
     zest2 = np.array([m.zest2 for m in mergers])
     mag = np.array([-2.5*np.log10(m.flux)+config.zeropt for m in mergers])
@@ -118,7 +118,7 @@ def main():
     #comparison of measured and real flux ratios
     ax = subs.next()
     ax.scatter(fluxratio[isdbl&restrict], 
-               measufluxratio[isdbl&restrict],
+               measfluxratio[isdbl&restrict],
                c=redshift[isdbl&restrict], lw=0, alpha=0.5)
     ax.tick_params(labelsize=8)
     ax.set_xlabel('input flux ratio', size=10)
@@ -128,13 +128,14 @@ def main():
     ax.set_xlim((0.005,1.1))
     ax.set_ylim((0.005,1.1))
     ax.plot([1.e-3,1],[1.e-3,1], 'k-')
-    print 'fit to real flux-measured flux ratio',
-    print np.polyfit((fluxratio[isdbl&restrict]),
-                     measfluxratio[isdbl&restrict], 1)
-    print 'spearman-r real flux-measured flux ratio',
-    print spearmanr(fluxratio[isdbl&restrict], 
-               np.array([m.measFlux12() 
-               for m in mergers[isdbl&masscut&zestcut]]))
+    if sum(isdbl&restrict) > 0:
+        print 'fit to real flux-measured flux ratio',
+        print np.polyfit((fluxratio[isdbl&restrict]),
+                         measfluxratio[isdbl&restrict], 1)
+        print 'spearman-r real flux-measured flux ratio',
+        print spearmanr(fluxratio[isdbl&restrict], 
+                        np.array([m.measFlux12() 
+                                  for m in mergers[isdbl&masscut&zestcut]]))
     
     #completeness as a function of magnitude
     ax = subs.next()

@@ -16,6 +16,8 @@ import os
 import numpy as np
 from collections import defaultdict
 import matplotlib.figure as figure
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.ticker import MaxNLocator
 
 import astropy.io.fits
 import astropy.table
@@ -30,33 +32,33 @@ def readMergers(inputfolder, origfile, clean=False):
     with open(os.path.join(inputfolder,'cleaned_peaks_sources.txt')) as pSrc, open(os.path.join(inputfolder+'cleaned_peaks.txt')) as pXY:
         linesSrc = pSrc.readlines()
         linesPxy = pXY.readlines()
-        peaks = {}
-        for i in range(len(linesSrc)):
+        peaks = defaultdict(list)
+        for i in range(1,len(linesSrc)):
             fields = linesSrc[i].split()
             galid = int(fields[0])
             npeaks = int(fields[5])
-            peaks[galid] = defaultdict(list)
             for p in range(npeaks):
                 x0 = linesPxy[i].split()[2+2*p]
                 y0 = linesPxy[i].split()[2+2*p+1]
                 flux = fields[6+npeaks+p]
-                peaks.append((x0,y0,flux))
+                peaks[galid].append(map(float, (x0,y0,flux)))
     
     mergers = list()
-    origGals = astropy.table.Table().read(origfile)
+    origGals = astropy.table.Table().read(origfile, format='ascii')
     cosmos = FlatLambdaCDM(H0=config.H0, Om0=config.Om0)
-    ang_dist_kpc = cosmos.angular_diameter_distance(origGals['Z1']).to('kpc').value
+    ang_dist_kpc = cosmos.angular_diameter_distance(origGals['z1']).to('kpc').value
     for indg, g in enumerate(origGals):
         merger_kwargs = dict([(c, g[c]) for c in origGals.colnames])
         merger_kwargs['flux'] = (10.0**(-0.4*(g['mag1']-config.zeropt)) + 
                                 10.0**(-0.4*(g['mag2']-config.zeropt)))
         merger_kwargs['sepas'] = merger_kwargs['sep_kpc']/ang_dist_kpc[indg] * 206265.
         merger_kwargs['ang_dist_kpc'] = ang_dist_kpc[indg]
+        merger_kwargs['z'] = g['z1']
         mergers.append(Merger(**merger_kwargs))
         
         if g['ID'] in peaks:
             for p in peaks[g['ID']]:
-                mergers[-1].addPeak(**zip(['x0', 'y0', 'flux'], p))
+                mergers[-1].addPeak(**dict(zip(['x0', 'y0', 'flux'], p)))
         if clean:
             #this will remove peaks, but right now, I'm assuming that's already done
             #mergers[-1].cleanPeaks()
@@ -253,7 +255,7 @@ class Merger:
                     'k-', lw=2)
                     
         ax.tick_params(labelleft='off', labelbottom='off')
-        print 'plotted ', self.id1, self.id2, self.sepkpc, self.z, self.fluxratio,
+        print 'plotted ', self.id1, self.id2, self.sepkpc, self.z, self.flux_ratio,
         print self.mag, self.zest1, self.zest2, self.isdbl, self.isdetdbl, self.mag,
         print self.measFlux12(), self.measSep12()
         return im
