@@ -42,7 +42,7 @@ def main():
     try:
         os.makedirs(args.impath)
     except OSError:
-        continue
+        pass
     
     FigCanvas = FigCanvasPS if args.epsPlot else FigCanvasA
     ending='.eps' if args.epsPlot else '.png'
