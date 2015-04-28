@@ -135,7 +135,7 @@ def main():
         print 'spearman-r real flux-measured flux ratio',
         print spearmanr(fluxratio[isdbl&restrict], 
                         np.array([m.measFlux12() 
-                                  for m in mergers[isdbl&zestcut]]))
+                                  for m in mergers[isdbl&restrict]]))
     
     #completeness as a function of magnitude
     ax = subs.next()
