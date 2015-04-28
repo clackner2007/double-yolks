@@ -393,7 +393,7 @@ def main():
         print >>fpeaks,""
       
         if len(goodp) >= 2:
-            order = sorted(range(len(goodp)), key=lambda k: goodp[k].flux, reverse=True)
+            order = sorted(range(len(goodp)), key=lambda k: goodp[k].allflux, reverse=True)
             p0 = goodp[order[0]]
             p1 = goodp[order[1]]
             print >>fpairs, "%.5f %.5e "%(p1.getDist(p0.x0, p0.y0, scale=g.kpc_p_pix), p1.allflux/p0.allflux),
