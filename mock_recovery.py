@@ -52,7 +52,7 @@ def readMergers(inputfolder, origfile, clean=False):
         merger_kwargs['flux'] = (10.0**(-0.4*(g['mag1']-config.zeropt)) + 
                                 10.0**(-0.4*(g['mag2']-config.zeropt)))
         merger_kwargs['sepas'] = merger_kwargs['sep_kpc']/ang_dist_kpc[indg] * 206265.
-        merger_kwargs['ang_dist_kpc'] = ang_dist_kpc[indg]
+        merger_kwargs['angdist_kpc'] = ang_dist_kpc[indg]
         merger_kwargs['z'] = g['z1']
         mergers.append(Merger(**merger_kwargs))
         
