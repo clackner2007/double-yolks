@@ -84,6 +84,9 @@ def main():
     
     #show plots of the completeness as a function of lots of things
     fig = figure.Figure((12,12))
+    fig.set_size_inches((14,10))
+    fig.subplots_adjust(left=0.05, right=0.95, wspace=0.25, bottom=0.07,
+                        top=0.95)
     canv = FigCanvas(fig)
     subs = makesubplots(fig, nx=2)
     ax = subs.next()
@@ -91,6 +94,7 @@ def main():
     plotcomplete(ax, redshift, redshift, 
                  restrict, isdbl, isdbl, name='redshift', 
                  split=False, nbins=10)
+    ax.legend()
     ax2 = ax.twinx()
     ax2.hist(redshift[restrict], bins=10, 
             histtype='step', color='k', ls='dotted')
@@ -102,7 +106,7 @@ def main():
     plotcomplete(ax, sepkpc, np.array([m.measSep12() for m in mergers]), 
                  zestcut&(fluxratio>desired_fr), isdbl, isdbl, name='separation',
                  split=True, nbins=[0,1.0,1.75,2.25,2.75,4.0,6.0,9.0,11.0])
-                
+
     ax.set_ylim((0,1.1))
            
     ax = subs.next()
