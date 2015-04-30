@@ -180,7 +180,7 @@ class Merger:
         return self.MeasP2
             
     def getSeps(self, x0, y0):
-        return [self.toKpc(pp.distTo(x0, y0, scaling=0.03))
+        return [self.toKpc(pp.distTo(x0, y0, scaling=config.pixelscale))
                 for pp in self.peaklist]
                 
     def getSepsMaxPeak(self, safe=False):
@@ -265,7 +265,7 @@ class Merger:
         p2 = self.getMeasPeak2()
         
         if (p1 is not None) and (p2 is not None):
-            return self.toKpc(p1.distTo(p2.x0, p2.y0, scaling=0.03))
+            return self.toKpc(p1.distTo(p2.x0, p2.y0, scaling=config.pixelscale))
         else:
             return -1
         
