@@ -192,9 +192,9 @@ def main():
     #plot showing the peak-flux/total-flux ratios for 'real' galaxy peaks and
     #other peaks found in the image. In this case, the 'real' peaks can come
     #from images in which both galaxies or only one was detected
-    ratio_false = np.asarray([p.flux/m.flux for m in mergers 
+    ratio_false = np.array([p.flux/m.flux for m in mergers 
                               for p in m.extrapeaks])
-    ratio_real = np.asarray([ip/m.flux for m in mergers for ip in m.flux12()])
+    ratio_real = np.array([ip/m.flux for m in mergers for ip in m.flux12()])
 
     #total flux cut we want to use:
     totfluxcut = 0.03
@@ -208,10 +208,10 @@ def main():
     width = (right-left)
     ax = fig.add_axes((left,bot,width,top-bot))
     hm = ax.hist(ratio_real,
-                 bins=np.logspace(-4,1,30), histtype='step', label='real galaxies',
+                 bins=np.logspace(-4,1.3,30), histtype='step', label='real galaxies',
                  color='k', lw=2)[0]
     ha = ax.hist(ratio_false,
-                 bins=np.logspace(-4,1,30), histtype='step', label='other peaks', 
+                 bins=np.logspace(-4,1.3,30), histtype='step', label='other peaks', 
                  color='r')[0]
     ax.axvline(totfluxcut, color='#A0A0A0', lw=2)
     ax.set_xlabel(r'$\mathrm{peak\ flux/total\ galaxy\ flux}$', size=11)
@@ -220,11 +220,11 @@ def main():
     ax.set_xscale('log')
     ax.set_xlim((1.e-4, 1.0))
     ax.tick_params(labelsize=9)
-    print 'fraction of other peaks above ratio=%.3f:   '%totalfluxcut,
-    print sum(ratio_false > totalfluxcut) * 1.0/(sum(ratio_false > totalfluxcut) + 
-                                                 sum(ratio_real > totalfluxcut))
-    print 'fraction of real peaks above ratio=%.3f:   '%totalfluxcut,
-    print sum(ratio_real>totalfluxcut) * 1.0 / (len(ratio_real))
+    print 'fraction of other peaks to all peaks above ratio=%.3f:   '%totfluxcut,
+    print sum(ratio_false > totfluxcut) * 1.0/(sum(ratio_false > totfluxcut) + 
+                                                 sum(ratio_real > totfluxcut))
+    print 'fraction of real peaks above ratio=%.3f:   '%totfluxcut,
+    print sum(ratio_real>totfluxcut) * 1.0 / (len(ratio_real))
     fig.savefig(os.path.join(args.impath, 'peak_tot_flux_ratio'+ending))
 
     return 0

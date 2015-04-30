@@ -287,7 +287,7 @@ class Merger:
             f2 = [self.getMeasPeak2().flux]
         except AttributeError:
             f2 = []
-        return [f1, f2]
+        return f1+f2
 
 
 
