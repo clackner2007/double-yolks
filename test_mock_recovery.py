@@ -84,6 +84,9 @@ def main():
     
     #show plots of the completeness as a function of lots of things
     fig = figure.Figure((12,12))
+    fig.set_size_inches((14,10))
+    fig.subplots_adjust(left=0.05, right=0.95, wspace=0.25, bottom=0.07,
+                        top=0.95)
     canv = FigCanvas(fig)
     subs = makesubplots(fig, nx=2)
     ax = subs.next()
@@ -91,9 +94,11 @@ def main():
     plotcomplete(ax, redshift, redshift, 
                  restrict, isdbl, isdbl, name='redshift', 
                  split=False, nbins=10)
+    ax.legend()
     ax2 = ax.twinx()
     ax2.hist(redshift[restrict], bins=10, 
             histtype='step', color='k', ls='dotted')
+    ax2.tick_params(labelsize=8)
     ax.set_ylim((0,1.1))
     
     ax = subs.next()
@@ -101,7 +106,7 @@ def main():
     plotcomplete(ax, sepkpc, np.array([m.measSep12() for m in mergers]), 
                  zestcut&(fluxratio>desired_fr), isdbl, isdbl, name='separation',
                  split=True, nbins=[0,1.0,1.75,2.25,2.75,4.0,6.0,9.0,11.0])
-                
+
     ax.set_ylim((0,1.1))
            
     ax = subs.next()
@@ -112,7 +117,7 @@ def main():
                 split=True, nbins=10)
     ax2 = ax.twinx()
     ax2.hist(fluxratio, histtype='step', bins=10, color='k', ls='dotted')
-
+    ax2.tick_params(labelsize=8)
     ax.set_ylim((0,1.1))
     
     #comparison of measured and real flux ratios
@@ -153,6 +158,7 @@ def main():
                np.array([m.measSep12() for m in mergers[isdbl&zestcut]]),
                c=mag[isdbl&zestcut], lw=0, alpha=0.5)
     ax.tick_params(labelsize=8)
+    ax2.tick_params(labelsize=8)
     ax.set_xlabel('input sep kpc', size=10)
     ax.set_ylabel('meas. sep kpc', size=10)
     ax.plot([0,11],[0,11], 'k-')
@@ -162,9 +168,15 @@ def main():
     
  
     #do contamination tests here --in progress
+
+    #images with 2 measured peaks
     measdbl = np.array([m.getNPeaks()>1 for m in mergers])
+    #images where the 2 measured peaks ARE the real merging galaxies
     realdbl = np.array([m.isdbl for m in mergers])
+    #images where the 2 measured peaks aren't the real galaxies (one could be)
     fakedbl = measdbl & (~realdbl)
+    #images where the 2 measured peaks are the real galaxies, but the 
+    #real flux ratios and real separations are outside the desired range
     interloperdbl = realdbl & (fluxratio <= desired_fr) & ((sepkpc < sep_kpc_min) | (sepkpc >= sep_kpc_max))
     print "number of mergers", len(mergers)
     print 'number measured pairs', sum(measdbl)
@@ -177,6 +189,44 @@ def main():
     print 'number false pairs', sum(fakedbl&restrict)
     print "number of real pairs with wrong separation or flux ratio", sum(interloperdbl)
     
+    #plot showing the peak-flux/total-flux ratios for 'real' galaxy peaks and
+    #other peaks found in the image. In this case, the 'real' peaks can come
+    #from images in which both galaxies or only one was detected
+    ratio_false = np.asarray([p.flux/m.flux for m in mergers 
+                              for p in m.extrapeaks])
+    ratio_real = np.asarray([ip/m.flux for m in mergers for ip in m.flux12()])
+
+    #total flux cut we want to use:
+    totfluxcut = 0.03
+
+    fig = figure.Figure((3,3))
+    canv = FigCanvas(fig)
+    left=0.2
+    bot=0.2
+    top=0.96
+    right=0.96
+    width = (right-left)
+    ax = fig.add_axes((left,bot,width,top-bot))
+    hm = ax.hist(ratio_real,
+                 bins=np.logspace(-4,1,30), histtype='step', label='real galaxies',
+                 color='k', lw=2)[0]
+    ha = ax.hist(ratio_false,
+                 bins=np.logspace(-4,1,30), histtype='step', label='other peaks', 
+                 color='r')[0]
+    ax.axvline(totfluxcut, color='#A0A0A0', lw=2)
+    ax.set_xlabel(r'$\mathrm{peak\ flux/total\ galaxy\ flux}$', size=11)
+    ax.set_ylabel(r'$\mathrm{number}$', size=11)
+    ax.legend(loc=2, prop={'size':9})
+    ax.set_xscale('log')
+    ax.set_xlim((1.e-4, 1.0))
+    ax.tick_params(labelsize=9)
+    print 'fraction of other peaks above ratio=%.3f:   '%totalfluxcut,
+    print sum(ratio_false > totalfluxcut) * 1.0/(sum(ratio_false > totalfluxcut) + 
+                                                 sum(ratio_real > totalfluxcut))
+    print 'fraction of real peaks above ratio=%.3f:   '%totalfluxcut,
+    print sum(ratio_real>totalfluxcut) * 1.0 / (len(ratio_real))
+    fig.savefig(os.path.join(args.impath, 'peak_tot_flux_ratio'+ending))
+
     return 0
 
 

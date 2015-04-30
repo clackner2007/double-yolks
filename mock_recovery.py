@@ -280,13 +280,13 @@ class Merger:
             
     def flux12(self):
         try:
-            f1 = self.getMeasPeak1().flux
+            f1 = [self.getMeasPeak1().flux]
         except AttributeError:
-            f1 = -1
+            f1 = []
         try:
-            f2 = self.getMeasPeak2().flux
+            f2 = [self.getMeasPeak2().flux]
         except AttributeError:
-            f2 = -1
+            f2 = []
         return [f1, f2]
 
 
