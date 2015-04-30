@@ -48,7 +48,7 @@ def main():
     ending='.eps' if args.epsPlot else '.png'
 
     desired_fr = 0.25 #desired flux ratio we want to be sensitive down to (exclude 'minor' mergers)
-    sep_kpc_min = 2.2 #minimum REAL separation we expect to measure
+    sep_kpc_min = 3.5 #minimum REAL separation we expect to measure
     sep_kpc_max = 8.0 #maximum REAL separation we expect to measure 
                         #(note the sims aren't separated by more than 10 kpc)
     
